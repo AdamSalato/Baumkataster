@@ -3,6 +3,19 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# PyInstaller Ausgabeverzeichnisse (Die EXE und Zwischenschritte)
+dist/
+build/
+*.spec
+
+# Python Zwischenspeicher
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Lokale Datenbank (damit deine privaten Testdaten nicht online landen)
+*.db
+
 # User-specific files
 *.rsuser
 *.suo
