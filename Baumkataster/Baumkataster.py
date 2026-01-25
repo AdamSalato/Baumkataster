@@ -631,7 +631,7 @@ class BaumkatasterApp:
     def load_table(self):
         for i in self.tree.get_children(): self.tree.delete(i)
         q = f"%{self.search_var.get()}%"
-        self.cursor.execute('SELECT id, name, baumart, strasse, stadt FROM baeume WHERE name LIKE ? OR baumart LIKE ? OR stadt LIKE ?', (q, q, q))
+        self.cursor.execute('SELECT id, name, baumart, strasse, stadt FROM baeume WHERE name LIKE ? OR baumart LIKE ? OR stadt LIKE ? OR strasse LIKE ?', (q, q, q, q))
         for r in self.cursor.fetchall(): self.tree.insert('', 'end', iid=r['id'], values=(r['id'], r['name'], r['baumart'], r['strasse'], r['stadt']))
 
     def show_empty_attributes(self):
