@@ -11,7 +11,6 @@ Ein Desktop-basiertes Management-Tool für den Garten- und Landschaftsbau zur di
 
 * **Interaktive Kartenansicht:** Visualisierung der Bäume via `tkintermapview` (OpenStreetMap).
 * **Geocoding:** Automatische Ermittlung von Koordinaten basierend auf der Adresse.
-* **Rechtssichere Dokumentation:** Erstellung von detaillierten Kontrollprotokollen (FLL-konform orientiert).
 * **Blanko-Export:** Generierung leerer Begehungsprotokolle für die Arbeit vor Ort.
 * **Risiko-Management:** Farblich kodierte Marker (Grün, Gelb, Rot) je nach Sicherheitszustand des Baumes.
 * **Historisierung:** Speicherung beliebig vieler Kontrollgänge pro Baum in einer lokalen SQLite-Datenbank.
