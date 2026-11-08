@@ -1,38 +1,39 @@
-﻿# Baumkataster
-<p align="center"><img src="Baumkataster/resources/img_639049779004542596.png" alt="Baumkataster" width="400"/></p>
+# 🌳 Baumkataster
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
-![License](https://img.shields.io/badge/Lizenz-MIT-green.svg)
-![GUI](https://img.shields.io/badge/GUI-Tkinter-orange.svg)
+Webanwendung für Baumkontrollen im GaLaBau: Bäume auf der Karte erfassen, Prüfungen dokumentieren, fällige Kontrollen auf einen Blick sehen und Protokolle als PDF ausgeben.
 
-Ein Desktop-basiertes Management-Tool für den Garten- und Landschaftsbau zur digitalen Erfassung und Verwaltung von Baumbeständen inklusive geografischer Kartierung und automatisierter PDF-Protokollerstellung.
+**Aufruf:** https://adamsalato.github.io/Baumkataster/
 
-## Features
+![Dashboard](docs/dashboard.png)
 
-* **Interaktive Kartenansicht:** Visualisierung der Bäume via `tkintermapview` (OpenStreetMap).
-* **Geocoding:** Automatische Ermittlung von Koordinaten basierend auf der Adresse.
-* **Blanko-Export:** Generierung leerer Begehungsprotokolle für die Arbeit vor Ort.
-* **Risiko-Management:** Farblich kodierte Marker (Grün, Gelb, Rot) je nach Sicherheitszustand des Baumes.
-* **Historisierung:** Speicherung beliebig vieler Kontrollgänge pro Baum in einer lokalen SQLite-Datenbank.
+## Funktionen
 
----
+- Dashboard mit Karte und Baumliste, dringende Bäume stehen oben
+- Ampel nach Prüfintervall: überfällig (rot), ≤ 30 Tage (orange), ≤ 3 Monate (gelb)
+- Automatische Baum-IDs (B-001, B-002, …)
+- Neue Prüfung übernimmt die Werte der letzten Prüfung
+- Regelkontrolle mit Checkliste und Prüfhistorie
+- PDF-Export (letzte Prüfung, alle Prüfungen oder eine einzelne Prüfung)
+- Für Tablet und Handy geeignet, die Karte lässt sich ausblenden
 
-## Download Exe (Windows)
+![Baumansicht](docs/baum.png)
 
-Windows: 
+## Dateien
 
-1. Klick rechts auf dieser Seite auf **[Releases](https://github.com/AdamSalato/Baumkataster/releases)**.
-2. Lade dir dort unter "Assets" die Datei `Baumkataster.exe` herunter.
-3. Starte die Datei einfach per Doppelklick.
-   * **Hinweis:** Da die App (noch) nicht offiziell signiert ist, zeigt Windows beim ersten Start eventuell einen blauen Warnhinweis. Klick einfach auf **"Weitere Informationen"** und dann auf **"Trotzdem ausführen"**.
----
+| Datei | Zweck |
+|---|---|
+| `index.html` | Die Anwendung |
+| `setup.sql` | Einrichtung der Datenbank in Supabase |
+| `test.html` | Testversion ohne Datenbank (Login `admin` / `admin`, Daten nur im Browser) |
 
-## Nutzungshinweis
+## Einrichtung
 
-* Beim ersten Start wird automatisch eine Datenbankdatei im selben Verzeichnis angelegt.
-* **Rechtsklick** auf die Karte, um einen neuen Baum hinzuzufügen oder über Button "+ neuer Baum"."
-* Änderungen auf der Detailseite eines Baumes werden automatisch gespeichert.
-* Kontrollprotokolle könenn jederzeit erstellt werden. Über Dropdown-Menü können Kontrollprotokolle aufgerufen werden.
-* PDF Export erzeugt eine PDF des gewählten Baums und Kontrollprotokolls
-* PDF LEER EXPORT erzeugt ein leeres Kontrollprotokoll.
+1. Bei [Supabase](https://supabase.com) ein kostenloses Projekt anlegen.
+2. Im SQL Editor den Inhalt von `setup.sql` ausführen.
+3. Unter Authentication → Users die Benutzer anlegen und die freie Registrierung abschalten.
+4. In `index.html` `SUPABASE_URL` und `SUPABASE_KEY` (anon key) eintragen.
+5. GitHub Pages aktivieren: Settings → Pages → Branch `master`, Ordner `/ (root)`.
 
+## Alte Desktop-Version
+
+Die frühere Python-Anwendung ist unter [Releases](../../releases) weiterhin verfügbar.
