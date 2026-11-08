@@ -34,11 +34,16 @@ Webanwendung für Baumkontrollen im GaLaBau: Bäume auf der Karte erfassen, Prü
 2. Im SQL Editor den Inhalt von `setup.sql` ausführen.
 3. Unter Authentication → Users die Benutzer anlegen und die freie Registrierung abschalten.
     - Display Name so hinzufügen im SQL Editor:
-    update auth.users
-set raw_user_meta_data = raw_user_meta_data || '{"full_name": "NAME"}'
-where email = 'fasd@mail.de';
-4. In `index.html` `SUPABASE_URL` und `SUPABASE_KEY` (anon key) eintragen.
+    ```sql
+    UPDATE auth.users
+    SET raw_user_meta_data = raw_user_meta_data || '{"full_name": "NAME"}'
+    WHERE email = 'asd@mail.de';
+    ```
+4. In `index.html` entsprechend `SUPABASE_URL` und `SUPABASE_KEY` (anon key) eintragen.
+    - URL unter Integrations --> Data API
+    - Key unter Project Settings --> API Keys (Nur Public!)
 5. GitHub Pages aktivieren: Settings → Pages → Branch `master`, Ordner `/ (root)`.
+6. Login mit Zugangsdaten von Supabase
 
 ## Alte Desktop-Version
 
