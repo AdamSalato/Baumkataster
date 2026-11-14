@@ -103,7 +103,7 @@ TYPES.baum = {
       aktuell(o, P) { const a = o.aktuell || {}; P.row('Baumhöhe:', P.m(a.hoehe, 1, 'm')); P.row('Kronenbreite:', P.m(a.breite, 1, 'm')); P.row('Stammumfang:', P.m(a.umfang, 0, 'cm')); },
       pruef(k, P) {
         const D = k.daten || {};
-        P.row('Prüfer:', k.pruefer); P.row('Intervall (Jahre):', D.intervall);
+        P.row('Kunde:', k.kunde); P.row('Prüfer:', k.pruefer); P.row('Intervall (Jahre):', D.intervall);
         P.row('Baumhöhe:', P.m(D.hoehe, 1, 'm')); P.row('Kronenbreite:', P.m(D.breite, 1, 'm')); P.row('Stammumfang:', P.m(D.umfang, 0, 'cm'));
         P.row('Entwicklungsphase:', P.opts(PHASE, D.phase)); P.row('Zustand:', P.opts(ZUST, zNorm(D.zustand)));
         P.row('Sicherheitsrisiko:', P.opts(['gering', 'mittel', 'hoch'], k.sicherheit)); P.row('Handlungsbedarf:', P.opts(['ja', 'nein'], k.handlungsbedarf));

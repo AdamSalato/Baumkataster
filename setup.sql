@@ -22,7 +22,7 @@ create table if not exists objekte (
   typ text not null references objekttypen(code),
   kennung text not null unique,               -- wird automatisch vergeben, z. B. B-112
   name text not null,                         -- optional bei der Anlage, sonst = Kennung
-  kunde text,                                 -- Kunde / Auftraggeber
+  kunde text,                                 -- aktueller Kunde: aus der neuesten Prüfung (automatisch); ohne Prüfung direkt eingetragen
   art text,                                   -- Baum: Baumart
   strasse text, hausnummer text, plz text, stadt text,
   lat double precision not null,
@@ -48,6 +48,7 @@ create table if not exists pruefungen (
   id uuid primary key default gen_random_uuid(),
   objekt_id uuid not null references objekte(id) on delete cascade,
   datum date not null default current_date,
+  kunde text,                                 -- Kunde zum Zeitpunkt der Prüfung (frühere Kunden bleiben so nachvollziehbar)
   pruefer text,
   sicherheit text not null default 'gering' check (sicherheit in ('gering','mittel','hoch')),
   handlungsbedarf text not null default 'nein' check (handlungsbedarf in ('ja','nein')),
@@ -84,7 +85,7 @@ begin
   select * into n from pruefungen where objekt_id = bid order by datum desc, created_at desc limit 1;
   if found then
     update objekte set aktuell = n.daten, sicherheit = n.sicherheit, handlungsbedarf = n.handlungsbedarf,
-      pruefer = n.pruefer, letzte_pruefung = n.datum, massnahmen = n.massnahmen, anmerkungen = n.anmerkungen where id = bid;
+      pruefer = n.pruefer, letzte_pruefung = n.datum, massnahmen = n.massnahmen, anmerkungen = n.anmerkungen, kunde = n.kunde where id = bid;
   else
     update objekte set aktuell = '{}', sicherheit = 'gering', handlungsbedarf = 'nein',
       pruefer = null, letzte_pruefung = null, massnahmen = null, anmerkungen = null where id = bid;

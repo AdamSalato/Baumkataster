@@ -2,7 +2,7 @@
 // Bildet die Datenbank-Automatik aus setup.sql nach: ID-Vergabe, Übernahme der neuesten Prüfung, 12-Stunden-Sperre, Admin-Recht.
 // Anmeldung: admin / admin (Admin) oder pruefer / pruefer (normaler Benutzer).
 function createMock() {
-  const KEY = 'bk_test_db_v3', SESS = 'bk_test_user', listeners = [];
+  const KEY = 'bk_test_db_v4', SESS = 'bk_test_user', listeners = [];
   const USERS = { admin: { pw: 'admin', name: 'Admin', role: 'admin' }, pruefer: { pw: 'pruefer', name: 'P. Prüfer', role: null } };
   const me = () => USERS[localStorage.getItem(SESS)] || null, isAdmin = () => !!me() && me().role === 'admin';
   const gesperrt = k => !isAdmin() && Date.now() - new Date(k.created_at).getTime() > 12 * 36e5;
@@ -28,7 +28,7 @@ function createMock() {
   function sync(bid) {
     const t = db.objekte.find(x => x.id === bid); if (!t) return;
     const n = db.pruefungen.filter(k => k.objekt_id === bid).sort((a, b) => b.datum.localeCompare(a.datum) || b.created_at.localeCompare(a.created_at))[0];
-    if (n) Object.assign(t, { aktuell: clone(n.daten), sicherheit: n.sicherheit, handlungsbedarf: n.handlungsbedarf, pruefer: n.pruefer, letzte_pruefung: n.datum, massnahmen: n.massnahmen, anmerkungen: n.anmerkungen });
+    if (n) Object.assign(t, { aktuell: clone(n.daten), sicherheit: n.sicherheit, handlungsbedarf: n.handlungsbedarf, kunde: n.kunde, pruefer: n.pruefer, letzte_pruefung: n.datum, massnahmen: n.massnahmen, anmerkungen: n.anmerkungen });
     else Object.assign(t, { aktuell: {}, sicherheit: 'gering', handlungsbedarf: 'nein', pruefer: null, letzte_pruefung: null, massnahmen: null, anmerkungen: null });
   }
 
@@ -60,7 +60,7 @@ function createMock() {
       if (ago == null) return;
       for (let i = prev; i >= 0; i--) {   // älteste zuerst, damit created_at stimmt
         d.pruefungen.push(prDef({
-          objekt_id: t.id, datum: ld(ago + 365 * i), pruefer: P[(i + idx) % 2],
+          objekt_id: t.id, datum: ld(ago + 365 * i), kunde: idx === 3 && i ? 'Hausverwaltung Alt & Partner' : t.kunde, pruefer: P[(i + idx) % 2],
           sicherheit: i ? (ri === 'hoch' ? 'mittel' : 'gering') : ri, handlungsbedarf: i ? 'nein' : ha,
           massnahmen: i ? null : (mass || null), anmerkungen: i ? null : (bef.length ? 'Siehe Regelkontrolle' : null),
           daten: {
@@ -150,4 +150,4 @@ function createMock() {
     }
   };
 }
-if ($('bReset')) $('bReset').onclick = () => { if (confirm('Alle Testdaten verwerfen und die Beispieldaten neu laden?')) { localStorage.removeItem('bk_test_db_v3'); location.reload(); } };
+if ($('bReset')) $('bReset').onclick = () => { if (confirm('Alle Testdaten verwerfen und die Beispieldaten neu laden?')) { localStorage.removeItem('bk_test_db_v4'); location.reload(); } };

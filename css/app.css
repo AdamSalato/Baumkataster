@@ -106,7 +106,8 @@ tr.r:hover td{background:#f4f8f5}
 tr.r.off td{background:var(--off-bg);color:var(--mute)}
 tr.r.off:hover td{background:#dfe4e0}
 td small{display:block;line-height:1.25}
-td.idc{white-space:nowrap;font-weight:700}
+td.idc{white-space:nowrap;font-weight:700;font-size:12.5px;padding-right:2px}
+th:first-child button{padding-right:2px}
 td.nw{white-space:nowrap}
 .badge{font-size:11px;font-weight:700;border-radius:4px;padding:1px 5px;margin-left:5px;vertical-align:1px}
 .badge.off{background:var(--off-m);color:#fff}.badge.blu{background:var(--blu-bg);color:var(--blu)}.badge.red{background:var(--red);color:#fff}.badge.org{background:var(--org-bg);color:var(--org)}
@@ -125,7 +126,7 @@ td.nw{white-space:nowrap}
 .tile.yel{background:var(--yel-bg);border-color:#ecd987}.tile.yel .big,.tile.yel small{color:var(--yel)}
 .tile.grn{background:var(--grn-bg);border-color:#aed6bb}.tile.grn .big,.tile.grn small{color:var(--grn)}
 .flags{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
-.kbar{margin:2px 0 4px;max-width:520px}
+.kbar{margin:8px 0 2px;max-width:520px}
 .lock{border-radius:8px;padding:9px 12px;margin:0 0 4px;font-size:13.5px;font-weight:600;background:var(--off-bg);color:var(--ink)}
 .lock.adm{background:var(--blu-bg);color:var(--blu)}
 .lock.ok{background:none;padding:0;font-weight:400;color:var(--mute)}

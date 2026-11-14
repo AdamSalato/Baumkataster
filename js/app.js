@@ -280,7 +280,6 @@ function renderDetail() {
   $('detail').innerHTML = `
   <div class="dhead"><button class="btn sec" id="bBack">← Dashboard</button><div><h2 id="dTitle"></h2><small id="dAddr"></small></div></div>
   <div id="facts"></div>
-  <div class="kbar">${field('Kunde', 't', 'kunde', t.kunde, 'text', 'list="kunden" autocomplete="off" placeholder="Tippen oder auswählen"')}</div>
   <div class="acts"><button class="btn pri big" id="bNew">+ Neue Prüfung</button><button class="btn sec" id="bPdfLast">PDF (nur letzte Prüfung)</button><button class="btn sec" id="bPdfAll">PDF (alle Prüfungen)</button></div>
   <section class="card"><h3>Prüfungen</h3><div id="hist"></div><div id="kform"></div></section>
   <details class="card" open><summary>Stammdaten</summary>
@@ -312,16 +311,18 @@ function renderFacts() {
 }
 function renderHist() {
   const Ty = T(S.sel);
-  $('hist').innerHTML = S.kons.length ? S.kons.map(k => `<button class="hrow${k.id === S.kid ? ' on' : ''}" data-kid="${k.id}"><span>${abgelaufen(k) ? '<span title="abgeschlossen">🔒</span> ' : ''}${fmtD(k.datum)}</span><span class="mute">${esc(k.pruefer || '–')}</span><span>${Ty.keyFmt(Ty.keyValue({ aktuell: k.daten }))}</span><span class="chip ${RISK[k.sicherheit].c}">${cap(k.sicherheit)}</span></button>`).join('') : '<div class="empty">Noch keine Prüfung erfasst.<br>Mit „+ Neue Prüfung“ die erste anlegen.</div>';
+  $('hist').innerHTML = S.kons.length ? S.kons.map(k => `<button class="hrow${k.id === S.kid ? ' on' : ''}" data-kid="${k.id}"><span>${abgelaufen(k) ? '<span title="abgeschlossen">🔒</span> ' : ''}${fmtD(k.datum)}</span><span class="mute">${esc([k.pruefer, k.kunde].filter(Boolean).join(' · ') || '–')}</span><span>${Ty.keyFmt(Ty.keyValue({ aktuell: k.daten }))}</span><span class="chip ${RISK[k.sicherheit].c}">${cap(k.sicherheit)}</span></button>`).join('') : '<div class="empty">Noch keine Prüfung erfasst.<br>Mit „+ Neue Prüfung“ die erste anlegen.</div>';
 }
 function renderForm() {
   const k = kCur(), el = $('kform');
-  if (!k) { el.innerHTML = S.sel.typ === 'baum' ? `<h4>Baumart</h4>${artInput(S.sel.art)}` : ''; return; }
+  const kundeFeld = (s, v) => `<div class="kbar">${field('Kunde', s, 'kunde', v, 'text', 'list="kunden" autocomplete="off" placeholder="Tippen oder auswählen"')}</div>`;
+  // Ohne Prüfung gehört der Kunde zum Objekt; sonst steht er in der Prüfung (so bleiben frühere Kunden in der Historie sichtbar)
+  if (!k) { el.innerHTML = kundeFeld('t', S.sel.kunde) + (S.sel.typ === 'baum' ? `<h4>Baumart</h4>${artInput(S.sel.art)}` : ''); return; }
   const lk = locked(k), h = CONFIG.SPERRE_STUNDEN;
   const note = lk ? `<div class="lock">🔒 Diese Prüfung ist abgeschlossen (älter als ${h} Stunden) und kann nicht mehr geändert werden. Für neue Werte bitte „+ Neue Prüfung“ anlegen.</div>`
     : abgelaufen(k) ? `<div class="lock adm">Admin: Diese Prüfung ist für andere Benutzer gesperrt (älter als ${h} Stunden). Du kannst sie weiterhin ändern.</div>`
     : `<div class="lock ok">Änderbar bis ${sperreAb(k).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr, danach abgeschlossen.</div>`;
-  el.innerHTML = note + T(S.sel).form(k) + `<div class="foot"><button class="btn sec" id="bPdfOne">PDF dieser Prüfung</button>${lk ? '' : '<button class="btn dan" id="bKdel">Prüfung löschen</button>'}</div>`;
+  el.innerHTML = note + kundeFeld('k', k.kunde) + T(S.sel).form(k) + `<div class="foot"><button class="btn sec" id="bPdfOne">PDF dieser Prüfung</button>${lk ? '' : '<button class="btn dan" id="bKdel">Prüfung löschen</button>'}</div>`;
   if (lk) el.querySelectorAll('[data-k],[data-d],[data-chk],.ar button').forEach(e => { e.disabled = true; });
 }
 
@@ -371,6 +372,7 @@ async function commit(el) {
       if (f === 'datum') S.kons.sort((a, b) => b.datum.localeCompare(a.datum) || b.created_at.localeCompare(a.created_at));
       renderHist();
       await syncSel();            // Datenbank-Trigger übernimmt die Werte der neuesten Prüfung ins Objekt
+      if (f === 'kunde') refreshKunden();
     } else renderForm();
   }
 }
@@ -415,13 +417,13 @@ async function newPruefung() {
   const t = S.sel, last = S.kons[0], Ty = T(t);
   const row = { objekt_id: t.id, datum: isoD(today()) };
   if (last) {            // alle bestehenden Werte der letzten Prüfung übernehmen
-    ['pruefer', 'sicherheit', 'handlungsbedarf', 'massnahmen', 'anmerkungen', 'erledigung_sofort', 'erledigung_wochen'].forEach(f => row[f] = last[f]);
+    ['kunde', 'pruefer', 'sicherheit', 'handlungsbedarf', 'massnahmen', 'anmerkungen', 'erledigung_sofort', 'erledigung_wochen'].forEach(f => row[f] = last[f]);
     row.daten = JSON.parse(JSON.stringify(last.daten || {}));
     if (row.daten.intervall == null || row.daten.intervall === '') row.daten.intervall = 1;
     row.pruefer = meName() || last.pruefer;
   } else {
     row.daten = { ...Ty.defaultDaten(), ...JSON.parse(JSON.stringify(t.aktuell || {})) };
-    row.pruefer = meName();
+    row.pruefer = meName(); row.kunde = t.kunde;
   }
   const { data, error } = await sb.from('pruefungen').insert(row).select().single();
   if (error) return toast('Anlegen fehlgeschlagen: ' + error.message, true);
@@ -499,7 +501,7 @@ async function insertObject(f, ll, src) {
   if (error) return toast('Anlegen fehlgeschlagen: ' + error.message, true);
   if (f.first) {
     const daten = { ...Ty.defaultDaten(), ...(f.hoehe != null ? { hoehe: f.hoehe } : {}) };
-    const { error: e2 } = await sb.from('pruefungen').insert({ objekt_id: data.id, datum: isoD(today()), pruefer: meName(), daten });
+    const { error: e2 } = await sb.from('pruefungen').insert({ objekt_id: data.id, datum: isoD(today()), kunde: f.kunde, pruefer: meName(), daten });
     if (e2) toast('Angelegt, aber erste Prüfung fehlgeschlagen: ' + e2.message, true);
   }
   const { data: fresh } = await sb.from('objekte').select('*').eq('id', data.id).single();

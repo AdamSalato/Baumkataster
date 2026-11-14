@@ -11,7 +11,7 @@ Webanwendung für Baumkontrollen im GaLaBau: Bäume auf der Karte erfassen, Prü
 - Dashboard mit Karte und Baumliste, dringende Bäume stehen oben
 - Ampel nach Prüfintervall: überfällig (rot), ≤ 30 Tage (orange), ≤ 3 Monate (gelb)
 - Automatische Baum-IDs (B-001, B-002, …)
-- Kunde je Baum, Filter und Suche nach Kunde
+- Kunde je Prüfung (frühere Kunden bleiben in der Historie sichtbar), Filter und Suche nach Kunde
 - Neue Prüfung übernimmt die Werte der letzten Prüfung
 - Prüfungen sind 12 Stunden nach dem Anlegen abgeschlossen, danach kann nur ein Admin sie ändern
 - Bäume als „Entfernt“ markieren (bleiben dokumentiert, eigene Kachel)
@@ -38,7 +38,7 @@ Webanwendung für Baumkontrollen im GaLaBau: Bäume auf der Karte erfassen, Prü
 | `js/mock.js` | Testversion ohne Datenbank |
 | `test.html` | Öffnet die Testversion (`index.html?test`), Login `admin` / `admin` oder `pruefer` / `pruefer` |
 | `setup.sql` | Neue Datenbank in Supabase einrichten |
-| `update_2026-11.sql` | Bestehende Datenbank aktualisieren (ohne Datenverlust) |
+| `update_2026-11.sql`, `update_2026-11b.sql` | Bestehende Datenbank aktualisieren (ohne Datenverlust), in dieser Reihenfolge |
 
 ## Aussehen anpassen
 
