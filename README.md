@@ -11,9 +11,13 @@ Webanwendung für Baumkontrollen im GaLaBau: Bäume auf der Karte erfassen, Prü
 - Dashboard mit Karte und Baumliste, dringende Bäume stehen oben
 - Ampel nach Prüfintervall: überfällig (rot), ≤ 30 Tage (orange), ≤ 3 Monate (gelb)
 - Automatische Baum-IDs (B-001, B-002, …)
+- Kunde je Baum, Filter und Suche nach Kunde
 - Neue Prüfung übernimmt die Werte der letzten Prüfung
+- Prüfungen sind 12 Stunden nach dem Anlegen abgeschlossen, danach kann nur ein Admin sie ändern
+- Bäume als „Entfernt“ markieren (bleiben dokumentiert, eigene Kachel)
 - Regelkontrolle mit Checkliste und Prüfhistorie
-- PDF-Export (letzte Prüfung, alle Prüfungen oder eine einzelne Prüfung)
+- PDF-Protokoll (letzte Prüfung, alle Prüfungen oder eine einzelne Prüfung)
+- PDF-Liste der aktuellen Auswahl als Tabelle mit frei wählbaren Spalten
 - Für Tablet und Handy geeignet, die Karte lässt sich ausblenden
 
 ![Baumansicht](docs/baum.png)
@@ -22,15 +26,32 @@ Webanwendung für Baumkontrollen im GaLaBau: Bäume auf der Karte erfassen, Prü
 
 | Datei | Zweck |
 |---|---|
-| `index.html` | Die Anwendung |
-| `setup.sql` | Einrichtung der Datenbank in Supabase |
-| `test.html` | Testversion ohne Datenbank (Login `admin` / `admin`, Daten nur im Browser) |
+| `index.html` | Seitengerüst der Anwendung |
+| **`config.js`** | **Einstellungen:** Supabase-Zugang, Name, Firma, Logo, Startadresse, Fristen |
+| **`css/theme.css`** | **Farben** (Corporate Design) |
+| `img/logo.svg` | Logo in Kopfzeile und Anmeldung |
+| `css/app.css` | Aufbau und Layout |
+| `js/basis.js` | Helfer, Formular-Bausteine, Prüfstatus |
+| `js/baum.js` | Objekttyp Baum: Felder, Formular, Baumarten-Liste |
+| `js/app.js` | Anmeldung, Karte, Dashboard, Detailseite |
+| `js/pdf.js` | PDF-Protokoll und PDF-Liste |
+| `js/mock.js` | Testversion ohne Datenbank |
+| `test.html` | Öffnet die Testversion (`index.html?test`), Login `admin` / `admin` oder `pruefer` / `pruefer` |
+| `setup.sql` | Neue Datenbank in Supabase einrichten |
+| `update_2026-11.sql` | Bestehende Datenbank aktualisieren (ohne Datenverlust) |
+
+## Aussehen anpassen
+
+- **Farben:** in `css/theme.css` die Werte oben ändern (`--brand` = Hausfarbe, `--accent` = Aktions-Buttons).
+- **Logo:** eigene Datei nach `img/` legen und in `config.js` bei `LOGO` eintragen (SVG, PNG oder JPG).
+- **Name und Firma:** `APP_NAME` und `FIRMA` in `config.js`. Die Firma erscheint in allen PDFs.
+- **Logo in PDFs:** `PDF_LOGO` in `config.js` (nur PNG oder JPG).
 
 ## Einrichtung
 
 1. Bei [Supabase](https://supabase.com) ein kostenloses Projekt anlegen.
     - Enable Data API: Muss angehakt bleiben, sonst kann die App nicht auf die Datenbank zugreifen.
-    - Automatically expose new tables: Kannst du abwählen,
+    - Automatically expose new tables: Kann abgewählt werden.
 2. Im SQL Editor den Inhalt von `setup.sql` ausführen.
 3. Unter Authentication → Users die Benutzer anlegen und die freie Registrierung abschalten.
     - Display Name so hinzufügen im SQL Editor:
@@ -39,11 +60,22 @@ Webanwendung für Baumkontrollen im GaLaBau: Bäume auf der Karte erfassen, Prü
     SET raw_user_meta_data = raw_user_meta_data || '{"full_name": "NAME"}'
     WHERE email = 'asd@mail.de';
     ```
-4. In `index.html` entsprechend `SUPABASE_URL` und `SUPABASE_KEY` (anon key) eintragen.
+    - Admin-Recht vergeben (darf abgeschlossene Prüfungen ändern und löschen). Danach neu anmelden:
+    ```sql
+    UPDATE auth.users
+    SET raw_app_meta_data = raw_app_meta_data || '{"role": "admin"}'
+    WHERE email = 'asd@mail.de';
+    ```
+4. In `config.js` entsprechend `SUPABASE_URL` und `SUPABASE_KEY` eintragen.
     - URL unter Integrations --> Data API
     - Key unter Project Settings --> API Keys (Nur Public!)
 5. GitHub Pages aktivieren: Settings → Pages → Branch `master`, Ordner `/ (root)`.
 6. Login mit Zugangsdaten von Supabase
+
+## Weitere Objekttypen (z. B. Zäune)
+
+1. In Supabase: `insert into objekttypen (code, bezeichnung, praefix, intervall_monate) values ('zaun', 'Zaun', 'Z', 12);`
+2. `js/baum.js` als `js/zaun.js` kopieren, anpassen (`TYPES.zaun = …`) und in `index.html` einbinden.
 
 ## Alte Desktop-Version
 

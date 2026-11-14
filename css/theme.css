@@ -1,0 +1,34 @@
+/* =====================================================================
+   FARBEN & FORM (Corporate Design) – nur diese Datei anpassen.
+   Das Logo wird in config.js eingetragen (LOGO).
+   ===================================================================== */
+:root{
+  /* Hausfarben */
+  --brand:#1f4d36;        /* Kopfzeile, Hauptbuttons, PDF-Überschriften */
+  --brand-ink:#ffffff;    /* Schrift auf der Hausfarbe */
+  --accent:#2e9958;       /* Aktions-Buttons („+ Neuer Baum“, „+ Neue Prüfung“) */
+  --accent-ink:#ffffff;   /* Schrift auf der Aktionsfarbe */
+  --focus:#e8a317;        /* Rahmen des gerade aktiven Feldes */
+
+  /* Flächen und Schrift */
+  --bg:#f2f5f2;           /* Seitenhintergrund */
+  --card:#ffffff;         /* Karten, Tabellen, Felder */
+  --soft:#eef2ef;         /* Tabellenkopf, gesperrte Felder */
+  --ink:#17211b;          /* Schrift */
+  --mute:#5c685f;         /* Nebentexte */
+  --line:#dce3de;         /* Trennlinien */
+  --field:#b8c3bb;        /* Rahmen von Feldern */
+
+  /* Ampelfarben: jeweils Schrift, heller Hintergrund, kräftige Farbe (Karte, gewählte Buttons) */
+  --red:#a8231b;  --red-bg:#fde8e5;  --red-m:#d1342b;   /* überfällig, Risiko hoch */
+  --org:#8a4300;  --org-bg:#ffe5cc;  --org-m:#ef7d00;   /* fällig in ≤ 1 Monat */
+  --yel:#6b5400;  --yel-bg:#fff5bf;  --yel-m:#f2c200;   /* fällig in ≤ 3 Monaten, Risiko mittel */
+  --grn:#1b6a3d;  --grn-bg:#dff1e5;  --grn-m:#2e9958;   /* in Ordnung, Risiko gering */
+  --blu:#0b5cad;  --blu-bg:#dcebfb;                     /* Priorität */
+  --off:#6f7872;  --off-bg:#e8ece9;  --off-m:#8a938d;   /* entfernt, neutral */
+
+  /* Form */
+  --r:10px;               /* Eckenrundung der Karten */
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --logo-h:30px;          /* Höhe des Logos in der Kopfzeile */
+}
