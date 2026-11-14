@@ -1,9 +1,13 @@
 // ===== Objekttyp „Baum“: Felder, Formular, Kennzeichen, PDF-Inhalt und Baumarten-Vorschläge =====
 
 const PHASE = ['Jugendphase', 'Reifephase', 'Alterungsphase'];
-const ZUST = ['Gesund', 'Leicht geschädigt', 'Stark geschädigt'];
-const ZUST_ALT = { 'gesund/leicht geschädigt': 'Gesund', 'stärker geschädigt': 'Stark geschädigt' };
-const zNorm = z => ZUST_ALT[z] || z;
+// Vitalitätsstufen (gespeichert wird die Ziffer): [Wert, Bezeichnung, Farbe]
+const VITAL = [['0', '0 – Exploration', 'grn'], ['1', '1 – Degeneration', 'yel'], ['2', '2 – Stagnation', 'org'], ['3', '3 – Resignation', 'red'], ['4', '4 – Abgestorben', 'off']];
+// frühere Zustands-Werte werden den Stufen zugeordnet
+const ZUST_ALT = { 'Gesund': '0', 'Leicht geschädigt': '1', 'Stark geschädigt': '3', 'gesund/leicht geschädigt': '0', 'stärker geschädigt': '3' };
+const zNorm = z => z == null || z === '' ? null : String(ZUST_ALT[z] ?? z);
+const vital = z => VITAL.find(v => v[0] === zNorm(z));
+const vitL = z => vital(z) ? vital(z)[1] : '';
 const CHK = [
   ['In der Krone', ['K1 Astab-/ausbrüche', 'K2 Astrisse', 'K3 Wunden/Fäulen', 'K4 Fremder Bewuchs', 'K5 Belaubung auffällig', 'K6 Fehlentwicklungen', 'K7 Höhlungen', 'K8 Kappungsstellen', 'K9 Kronensicherungen', 'K10 Lichtraumprofil', 'K11 Pilzbefall', 'K12 Rindenschäden', 'K13 Totholzbildung', 'K14 Zwiesel/Vergabelung', 'K15 Wipfeldürre']],
   ['Am Stamm', ['S1 Anfahrschäden', 'S2 Astungswunden', 'S3 Fremder Bewuchs', 'S4 Fäulen', 'S5 Gewindestangen/Plomben', 'S6 Höhlungen', 'S7 Pilzbefall', 'S8 Rindenschäden', 'S9 Risse', 'S10 Schadinsekten', 'S11 Schrägstand', 'S12 Stammaustriebe', 'S13 Verletzungen', 'S14 Wuchsanomalien', 'S15 Zwiesel']],
@@ -58,11 +62,11 @@ const artInput = v => `<input type="text" list="baumarten" ${A('t', 'art')} valu
 TYPES.baum = {
     label: 'Baum', plural: 'Bäume', artLabel: 'Baumart', months: 12, keyLabel: 'Baumhöhe',
     keyValue: o => o.aktuell?.hoehe, keyFmt: v => v == null ? '–' : fmtN(v) + ' m',
-    defaultDaten: () => ({ phase: 'Jugendphase', zustand: ZUST[0], intervall: 1, befunde: [] }),
-    flags: o => { const a = o.aktuell || {}; return [a.prio && ['blu', 'Priorität'], a.faellung && ['red', 'Fällung erforderlich'], o.handlungsbedarf === 'ja' && o.letzte_pruefung && ['org', 'Handlungsbedarf'], o.letzte_pruefung && a.zustand && ['neu', zNorm(a.zustand)], o.letzte_pruefung && a.phase && ['neu', a.phase], a.umfang != null && ['neu', 'Stammumfang ' + fmtN(a.umfang, 0) + ' cm'], a.breite != null && ['neu', 'Krone ' + fmtN(a.breite) + ' m']].filter(Boolean); },
-    badges: o => (o.aktuell?.prio ? '<span class="badge blu">Priorität</span>' : '') + (o.aktuell?.faellung ? '<span class="badge red">Fällung</span>' : '') + (o.handlungsbedarf === 'ja' && o.letzte_pruefung ? '<span class="badge org">Handlung</span>' : ''),
+    defaultDaten: () => ({ phase: 'Jugendphase', zustand: '0', intervall: 1, befunde: [] }),
+    flags: o => { const a = o.aktuell || {}; return [a.faellung && ['red', 'Fällung erforderlich'], o.letzte_pruefung && vital(a.zustand) && [vital(a.zustand)[2], 'Vitalität ' + vitL(a.zustand)], o.letzte_pruefung && a.phase && ['neu', a.phase], a.umfang != null && ['neu', 'Stammumfang ' + fmtN(a.umfang, 0) + ' cm'], a.breite != null && ['neu', 'Krone ' + fmtN(a.breite) + ' m']].filter(Boolean); },
+    badges: o => o.aktuell?.faellung ? '<span class="badge red">Fällung</span>' : '',
     isFlagged: o => !!o.aktuell?.faellung,
-    csv: ['hoehe', 'breite', 'umfang', 'phase', 'zustand', 'faellung', 'prio'],
+    csv: ['hoehe', 'breite', 'umfang', 'phase', 'zustand', 'faellung'],
     // zusätzliche Spalten für die PDF-Liste: [Schlüssel, Überschrift, Breite (Gewicht), Wert, in der Standardauswahl?]
     listTitle: 'Baumliste',
     listCols: [
@@ -70,30 +74,27 @@ TYPES.baum = {
       ['breite', 'Krone', 1.1, o => o.aktuell?.breite == null ? '' : fmtN(o.aktuell.breite) + ' m', false],
       ['umfang', 'Stammumfang', 1.3, o => o.aktuell?.umfang == null ? '' : fmtN(o.aktuell.umfang, 0) + ' cm', false],
       ['phase', 'Entwicklungsphase', 1.7, o => o.letzte_pruefung ? o.aktuell?.phase || '' : '', false],
-      ['zustand', 'Zustand', 1.7, o => o.letzte_pruefung ? zNorm(o.aktuell?.zustand) || '' : '', false],
-      ['faellung', 'Fällung erforderlich', 1.2, o => o.aktuell?.faellung ? 'ja' : '', false],
-      ['prio', 'Priorität', 1.1, o => o.aktuell?.prio ? 'ja' : '', false]
+      ['zustand', 'Vitalitätsstufe', 1.7, o => o.letzte_pruefung ? vitL(o.aktuell?.zustand) : '', false],
+      ['faellung', 'Fällung erforderlich', 1.2, o => o.aktuell?.faellung ? 'ja' : '', false]
     ],
     stammForm: o => field('Alter / Standzeit', 's', 'alter_standort', o.stamm?.alter_standort),
     stammNotiz: o => area('Besonderheiten', 's', 'besonderheiten', o.stamm?.besonderheiten),
     form(k) {
-      const D = { ...this.defaultDaten(), ...(k.daten || {}) }, bf = D.befunde || []; D.zustand = zNorm(D.zustand);
+      const D = { ...this.defaultDaten(), ...(k.daten || {}) }, bf = D.befunde || [];
       const groups = CHK.map(([h, l]) => { const c = l.filter(x => bf.includes(x.split(' ')[0])).length; return `<details class="chk" ${c ? 'open' : ''}><summary><span>${h}<span class="cnt ${c ? '' : 'z'}">${c}</span></span></summary><div class="cg">${l.map(x => `<label class="ck"><input type="checkbox" data-chk="${x.split(' ')[0]}" ${bf.includes(x.split(' ')[0]) ? 'checked' : ''}>${esc(x)}</label>`).join('')}</div></details>`; }).join('');
       return `
       <h4>Baumdaten zum Zeitpunkt der Prüfung</h4>
       <div class="g3">${num('Baumhöhe', 'd', 'hoehe', D.hoehe, 1, 'm', 0.1)}${num('Kronenbreite', 'd', 'breite', D.breite, 1, 'm', 0.1)}${num('Stammumfang', 'd', 'umfang', D.umfang, 0, 'cm', 1)}</div>
-      <h4>Entwicklungsphase</h4>${seg('d', 'phase', D.phase, PHASE)}
-      <h4>Zustand</h4>${seg('d', 'zustand', D.zustand, ZUST)}
       <h4>${this.artLabel}</h4>${artInput(S.sel.art)}
+      <div class="g2" style="margin-top:8px">${field('Prüfdatum', 'k', 'datum', k.datum, 'date')}${field('Prüfer', 'k', 'pruefer', k.pruefer)}${num('Kontrollintervall', 'd', 'intervall', D.intervall, 0, 'Jahre', 1)}${field('Weitere Kontrollstellen', 'd', 'weitere_stellen', D.weitere_stellen)}</div>
       <hr>
-      <div class="g2">${field('Prüfdatum', 'k', 'datum', k.datum, 'date')}${field('Prüfer', 'k', 'pruefer', k.pruefer)}${num('Kontrollintervall', 'd', 'intervall', D.intervall, 0, 'Jahre', 1)}${field('Weitere Kontrollstellen', 'd', 'weitere_stellen', D.weitere_stellen)}</div>
-      <h4>Sicherheitsrisiko</h4>${seg('k', 'sicherheit', k.sicherheit, ['gering', 'mittel', 'hoch'], 'rk')}
-      <h4>Handlungsbedarf</h4>${seg('k', 'handlungsbedarf', k.handlungsbedarf, ['ja', 'nein'])}
+      <h4>Entwicklungsphase</h4>${seg('d', 'phase', D.phase, PHASE)}
+      <h4>Zustand <span class="unit">(Vitalitätsstufe)</span></h4>${segC('d', 'zustand', zNorm(D.zustand), VITAL)}
+      <h4>Verkehrssicherheit</h4>${segC('k', 'sicherheit', SICH[k.sicherheit] ? k.sicherheit : 'sicher', Object.entries(SICH).map(([v, x]) => [v, x.l, x.c]))}
+      ${massForm(k)}
       ${cb('d', 'abstimmung_fachabt', D.abstimmung_fachabt, 'Abstimmung mit Fachabteilung')}${cb('d', 'eingehende_untersuchung', D.eingehende_untersuchung, 'Eingehende Untersuchung erforderlich')}
-      ${area('Baumpflegerische Maßnahmen', 'k', 'massnahmen', k.massnahmen)}
+      ${area('Maßnahmen Beschreibung', 'k', 'massnahmen', k.massnahmen)}
       ${cb('d', 'faellung', D.faellung, 'Fällung erforderlich', 'warn')}
-      ${cb('d', 'prio', D.prio, 'Priorität', 'prio')}
-      <div class="g2">${cb('k', 'erledigung_sofort', k.erledigung_sofort, 'Erledigung sofort')}${field('oder in (Wochen)', 'k', 'erledigung_wochen', k.erledigung_wochen)}</div>
       ${area('Anmerkungen', 'k', 'anmerkungen', k.anmerkungen)}
       <hr><h3>Regelkontrolle <small>nur verdächtige Umstände ankreuzen</small></h3>${groups}
       <div style="margin-top:10px">${area('Sonstiges, Anmerkungen zu verdächtigen Umständen', 'd', 'sonstiges', D.sonstiges)}</div>`;
@@ -105,11 +106,10 @@ TYPES.baum = {
         const D = k.daten || {};
         P.row('Kunde:', k.kunde); P.row('Prüfer:', k.pruefer); P.row('Intervall (Jahre):', D.intervall);
         P.row('Baumhöhe:', P.m(D.hoehe, 1, 'm')); P.row('Kronenbreite:', P.m(D.breite, 1, 'm')); P.row('Stammumfang:', P.m(D.umfang, 0, 'cm'));
-        P.row('Entwicklungsphase:', P.opts(PHASE, D.phase)); P.row('Zustand:', P.opts(ZUST, zNorm(D.zustand)));
-        P.row('Sicherheitsrisiko:', P.opts(['gering', 'mittel', 'hoch'], k.sicherheit)); P.row('Handlungsbedarf:', P.opts(['ja', 'nein'], k.handlungsbedarf));
+        P.row('Entwicklungsphase:', P.opts(PHASE, D.phase)); P.row('Vitalitätsstufe:', P.optsL(VITAL, zNorm(D.zustand)));
+        P.pruefStd(k);
         P.row('Abstimmung Fachabteilung:', P.yn(D.abstimmung_fachabt)); P.row('Eingehende Untersuchung:', P.yn(D.eingehende_untersuchung));
-        P.row('Baumpfleg. Maßnahmen:', k.massnahmen); P.row('Fällung erforderlich:', { o: [['ja', !P.blank && !!D.faellung]] }); P.row('Priorität:', { o: [['ja', !P.blank && !!D.prio]] });
-        P.row('Erledigung sofort:', { o: [['ja', !P.blank && !!k.erledigung_sofort]] }); P.row('Erledigung in (Wochen):', k.erledigung_wochen);
+        P.row('Fällung erforderlich:', { o: [['ja', !P.blank && !!D.faellung]] });
         P.row('Anmerkungen:', k.anmerkungen); P.row('Weitere Kontrollstellen:', D.weitere_stellen);
         P.gap(3); P.H('Regelkontrolle: nur verdächtige Umstände ankreuzen'); P.checklist(CHK, D.befunde || []);
         P.row('Sonstiges, Anmerkungen:', D.sonstiges); P.sign();

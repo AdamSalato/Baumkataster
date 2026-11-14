@@ -140,11 +140,11 @@ $('geoForm').onsubmit = async e => {
 function setMode(m) { S.mode = m; $('mP').classList.toggle('on', m === 'pruef'); $('mR').classList.toggle('on', m === 'risk'); renderMarkers(); renderLegend(); }
 $('mP').onclick = () => setMode('pruef'); $('mR').onclick = () => setMode('risk');
 function renderLegend() {
-  const it = S.mode === 'risk' ? [['grn', 'Risiko gering'], ['yel', 'mittel'], ['red', 'hoch']] : [['grn', 'Prüfung ok'], ['yel', '≤ 3 Monate'], ['org', '≤ 1 Monat'], ['red', 'überfällig']];
+  const it = S.mode === 'risk' ? Object.values(SICH).map(x => [x.c, x.k]) : [['grn', 'Prüfung ok'], ['yel', '≤ 3 Monate'], ['org', '≤ 1 Monat'], ['red', 'überfällig']];
   $('legend').innerHTML = it.map(([c, t]) => `<span><i style="background:${mcol(c)}"></i>${t}</span>`).join('');
 }
 function mStyle(t) {
-  const on = S.sel && S.sel.id === t.id, col = mcol(t.entfernt ? 'neu' : S.mode === 'risk' ? RISK[t.sicherheit].c : status(t).k);
+  const on = S.sel && S.sel.id === t.id, col = mcol(t.entfernt ? 'neu' : S.mode === 'risk' ? (t.letzte_pruefung ? sich(t.sicherheit).c : 'neu') : status(t).k);
   return { radius: on ? 13 : 10, color: on ? '#111' : '#fff', weight: on ? 4 : 2, fillColor: col, fillOpacity: 1 };
 }
 function renderMarkers() {
@@ -170,8 +170,8 @@ const FILTER = {
   all: ['', t => true, ''],
   red: ['Überfällig', t => status(t).k === 'red', 'red'],
   yel: ['Fällig ≤ 3 Monate', faelligBald, 'yel'],
-  risk: ['Risiko hoch', t => t.sicherheit === 'hoch' && !!t.letzte_pruefung, 'red'],
-  prio: ['Priorität', t => !!t.aktuell?.prio, 'blu'],
+  risk: ['Nicht verkehrssicher', t => t.sicherheit === 'unsicher' && !!t.letzte_pruefung, 'red'],
+  mass: ['Offene Maßnahmen', massOffen, 'org'],
   fael: ['Fällung nötig', t => T(t).isFlagged(t), ''],
   ent: ['Entfernt', t => true, 'off']
 };
@@ -180,14 +180,16 @@ const matchK = t => !S.kunde || (S.kunde === OHNE ? !t.kunde : t.kunde === S.kun
 const matchF = t => S.filter === 'ent' ? !!t.entfernt : !t.entfernt && (FILTER[S.filter] || FILTER.all)[1](t);
 const visible = t => t.typ === S.typ && ((S.sel && S.sel.id === t.id) || (matchK(t) && matchQ(t) && matchF(t)));
 function sorted(list) {
-  const { k, dir } = S.sort, ds = t => status(t).days, str = (a, b) => String(a ?? '').localeCompare(String(b ?? ''), 'de', { numeric: true });
+  const dir = S.sort.dir, k = S.filter === 'mass' && S.sort.k === 'dring' ? 'mass' : S.sort.k, ds = t => status(t).days, rk = t => sich(t.sicherheit).rank,
+    mb = t => { const d = massBis(t.letzte_pruefung, t.dringlichkeit); return d ? d.getTime() : 9e15; }, str = (a, b) => String(a ?? '').localeCompare(String(b ?? ''), 'de', { numeric: true });
   const cmp = {
-    dring: (a, b) => ds(a) - ds(b) || RISK[b.sicherheit].rank - RISK[a.sicherheit].rank,
+    dring: (a, b) => ds(a) - ds(b) || rk(b) - rk(a),
+    mass: (a, b) => mb(a) - mb(b) || rk(b) - rk(a),            // Kachel „Offene Maßnahmen“: früheste Frist zuerst
     id: (a, b) => str(a.kennung, b.kennung),
     name: (a, b) => str(a.name, b.name),
     kunde: (a, b) => str(a.kunde, b.kunde) || str(a.kennung, b.kennung),
     pruefer: (a, b) => str(a.pruefer, b.pruefer),
-    risk: (a, b) => RISK[b.sicherheit].rank - RISK[a.sicherheit].rank || ds(a) - ds(b),
+    risk: (a, b) => rk(b) - rk(a) || ds(a) - ds(b),
     key: (a, b) => (T(a).keyValue(a) ?? -1) - (T(b).keyValue(b) ?? -1)
   }[k];
   return list.slice().sort((a, b) => cmp(a, b) * dir);
@@ -216,11 +218,11 @@ function renderDash() {
   const rows = list.map(t => {
     const st = status(t), nm = t.name && t.name !== t.kennung ? esc(t.name) : '<span class="mute">–</span>';
     return `<tr class="r${t.entfernt ? ' off' : ''}" data-id="${t.id}" tabindex="0"><td class="idc">${esc(t.kennung)}</td>
-    <td><b>${nm}</b>${t.entfernt ? '<span class="badge off">Entfernt</span>' : T(t).badges(t)}<small>${esc([t.art, addr(t)].filter(Boolean).join(' · '))}</small></td>
+    <td><b>${nm}</b>${t.entfernt ? '<span class="badge off">Entfernt</span>' : T(t).badges(t) + (massOffen(t) ? `<span class="badge ${dring(t.dringlichkeit).c}">Maßnahme: ${dring(t.dringlichkeit).k}</span>` : '')}<small>${esc([t.art, addr(t)].filter(Boolean).join(' · '))}${massOffen(t) && !t.entfernt && S.filter === 'mass' ? `<br><b>Maßnahme ${massFrist(t.letzte_pruefung, t.dringlichkeit)}</b>${t.massnahmen ? ': ' + esc(t.massnahmen) : ''}` : ''}</small></td>
     <td class="hide-xs">${t.kunde ? esc(t.kunde) : '<span class="mute">–</span>'}</td>
     <td><span class="chip ${st.k}">${fmtD(t.letzte_pruefung)}</span><small>${st.label}</small></td>
     <td class="hide-s nw">${esc(t.pruefer || '–')}</td>
-    <td>${t.letzte_pruefung ? `<span class="chip ${t.entfernt ? 'neu' : RISK[t.sicherheit].c}">${cap(t.sicherheit)}</span>` : '<span class="mute">–</span>'}</td>
+    <td>${t.letzte_pruefung ? `<span class="chip ${t.entfernt ? 'neu' : sich(t.sicherheit).c}">${sich(t.sicherheit).k}</span>` : '<span class="mute">–</span>'}</td>
     <td class="hide-s nw">${T(t).keyFmt(T(t).keyValue(t))}</td></tr>`;
   }).join('');
   const types = Object.keys(TYPES).length > 1 ? `<select id="typSel" aria-label="Objekttyp">${Object.entries(TYPES).map(([c, v]) => `<option value="${c}" ${c === S.typ ? 'selected' : ''}>${v.plural}</option>`).join('')}</select>` : '';
@@ -228,7 +230,7 @@ function renderDash() {
   $('dash').innerHTML = `
   <div class="sum">${chips.map(([k, l, c, cls]) => `<button class="${cls}${S.filter === k ? ' on' : ''}" data-f="${k}" aria-pressed="${S.filter === k}"><b>${c}</b><span>${l}</span></button>`).join('')}</div>
   <div class="bar">${types}${kSel}<input id="q" type="search" placeholder="Suchen: ID, Name, Kunde, Art, Adresse, Prüfer" value="${esc(S.q)}" aria-label="Suchen"></div>
-  <div class="card tbl"><div class="sc"><table><thead><tr>${th('id', 'ID')}${th('name', 'Name')}${th('kunde', 'Kunde', 'hide-xs')}${th('dring', 'Letzte Prüfung')}${th('pruefer', 'Prüfer', 'hide-s')}${th('risk', 'Sicherheitsrisiko')}${th('key', TT.keyLabel.replace('Baumhöhe', 'Höhe'), 'hide-s')}</tr></thead>
+  <div class="card tbl"><div class="sc"><table><thead><tr>${th('id', 'ID')}${th('name', 'Name')}${th('kunde', 'Kunde', 'hide-xs')}${th('dring', 'Letzte Prüfung')}${th('pruefer', 'Prüfer', 'hide-s')}${th('risk', 'Verkehrssicherheit')}${th('key', TT.keyLabel.replace('Baumhöhe', 'Höhe'), 'hide-s')}</tr></thead>
   <tbody>${rows}</tbody></table>${rows ? '' : `<div class="empty">${pool.length || S.kunde ? 'Keine Treffer für diese Auswahl.' : `Noch keine ${TT.plural} erfasst. Mit „+ Neuer ${TT.label}“ den ersten anlegen.`}</div>`}</div></div>`;
 }
 $('dash').addEventListener('click', e => {
@@ -280,7 +282,6 @@ function renderDetail() {
   $('detail').innerHTML = `
   <div class="dhead"><button class="btn sec" id="bBack">← Dashboard</button><div><h2 id="dTitle"></h2><small id="dAddr"></small></div></div>
   <div id="facts"></div>
-  <div class="acts"><button class="btn pri big" id="bNew">+ Neue Prüfung</button><button class="btn sec" id="bPdfLast">PDF (nur letzte Prüfung)</button><button class="btn sec" id="bPdfAll">PDF (alle Prüfungen)</button></div>
   <section class="card"><h3>Prüfungen</h3><div id="hist"></div><div id="kform"></div></section>
   <details class="card" open><summary>Stammdaten</summary>
     <div class="g2">
@@ -302,16 +303,20 @@ function renderPos() {
 }
 function renderFacts() {
   const t = S.sel, st = status(t), has = !!t.letzte_pruefung, Ty = T(t);
-  const fl = Ty.flags(t); if (t.entfernt) fl.unshift(['off', st.label]); else if (t.pos_quelle === 'adresse') fl.push(['neu', 'Position ungefähr (aus Adresse), bei Bedarf auf der Karte neu setzen']);
+  const fl = Ty.flags(t), offen = massOffen(t);
+  if (offen) fl.unshift([dring(t.dringlichkeit).c, `Maßnahme offen: ${dring(t.dringlichkeit).l}, ${massFrist(t.letzte_pruefung, t.dringlichkeit)}`]);
+  else if (has && hatMass(t)) fl.unshift(['grn', `Maßnahme erledigt am ${fmtD(t.erledigt_am)}${t.erledigt_von ? ' (' + t.erledigt_von + ')' : ''}`]);
+  if (t.entfernt) fl.unshift(['off', st.label]); else if (t.pos_quelle === 'adresse') fl.push(['neu', 'Position ungefähr (aus Adresse), bei Bedarf auf der Karte neu setzen']);
   $('facts').innerHTML = `<div class="tiles">
     <div class="tile"><span class="lb">${Ty.keyLabel}</span><b class="big">${Ty.keyFmt(Ty.keyValue(t))}</b></div>
     <div class="tile ${st.k}"><span class="lb">Letzte Prüfung</span><b class="big">${fmtD(t.letzte_pruefung)}</b><small>${st.label}${t.pruefer ? ' · ' + esc(t.pruefer) : ''}</small></div>
-    <div class="tile ${has && !t.entfernt ? RISK[t.sicherheit].c : ''}"><span class="lb">Sicherheitsrisiko</span><b class="big">${has ? cap(t.sicherheit) : '–'}</b></div></div>
-  <div class="flags">${fl.map(([c, x]) => `<span class="chip ${c}">${esc(x)}</span>`).join('')}</div>`;
+    <div class="tile ${has && !t.entfernt ? sich(t.sicherheit).c : ''}"><span class="lb">Verkehrssicherheit</span><b class="big${has ? ' txt' : ''}">${has ? sich(t.sicherheit).l : '–'}</b></div></div>
+  <div class="flags">${fl.map(([c, x]) => `<span class="chip ${c}">${esc(x)}</span>`).join('')}</div>
+  <div class="acts"><button class="btn pri big" id="bNew">+ Neue Prüfung</button>${offen ? '<button class="btn sec big" id="bDone">✓ Maßnahme erledigt</button>' : ''}<button class="btn sec" id="bPdfLast">PDF (nur letzte Prüfung)</button><button class="btn sec" id="bPdfAll">PDF (alle Prüfungen)</button></div>`;
 }
 function renderHist() {
   const Ty = T(S.sel);
-  $('hist').innerHTML = S.kons.length ? S.kons.map(k => `<button class="hrow${k.id === S.kid ? ' on' : ''}" data-kid="${k.id}"><span>${abgelaufen(k) ? '<span title="abgeschlossen">🔒</span> ' : ''}${fmtD(k.datum)}</span><span class="mute">${esc([k.pruefer, k.kunde].filter(Boolean).join(' · ') || '–')}</span><span>${Ty.keyFmt(Ty.keyValue({ aktuell: k.daten }))}</span><span class="chip ${RISK[k.sicherheit].c}">${cap(k.sicherheit)}</span></button>`).join('') : '<div class="empty">Noch keine Prüfung erfasst.<br>Mit „+ Neue Prüfung“ die erste anlegen.</div>';
+  $('hist').innerHTML = S.kons.length ? S.kons.map(k => `<button class="hrow${k.id === S.kid ? ' on' : ''}" data-kid="${k.id}"><span>${abgelaufen(k) ? '<span title="abgeschlossen">🔒</span> ' : ''}${fmtD(k.datum)}</span><span class="mute">${esc([k.pruefer, k.kunde].filter(Boolean).join(' · ') || '–')}</span><span>${Ty.keyFmt(Ty.keyValue({ aktuell: k.daten }))}</span><span class="chip ${sich(k.sicherheit).c}">${sich(k.sicherheit).k}</span></button>`).join('') : '<div class="empty">Noch keine Prüfung erfasst.<br>Mit „+ Neue Prüfung“ die erste anlegen.</div>';
 }
 function renderForm() {
   const k = kCur(), el = $('kform');
@@ -319,11 +324,11 @@ function renderForm() {
   // Ohne Prüfung gehört der Kunde zum Objekt; sonst steht er in der Prüfung (so bleiben frühere Kunden in der Historie sichtbar)
   if (!k) { el.innerHTML = kundeFeld('t', S.sel.kunde) + (S.sel.typ === 'baum' ? `<h4>Baumart</h4>${artInput(S.sel.art)}` : ''); return; }
   const lk = locked(k), h = CONFIG.SPERRE_STUNDEN;
-  const note = lk ? `<div class="lock">🔒 Diese Prüfung ist abgeschlossen (älter als ${h} Stunden) und kann nicht mehr geändert werden. Für neue Werte bitte „+ Neue Prüfung“ anlegen.</div>`
+  const note = lk ? `<div class="lock">🔒 Diese Prüfung ist abgeschlossen (älter als ${h} Stunden) und kann nicht mehr geändert werden. Für neue Werte bitte „+ Neue Prüfung“ anlegen. Eine erledigte Maßnahme lässt sich weiterhin eintragen.</div>`
     : abgelaufen(k) ? `<div class="lock adm">Admin: Diese Prüfung ist für andere Benutzer gesperrt (älter als ${h} Stunden). Du kannst sie weiterhin ändern.</div>`
     : `<div class="lock ok">Änderbar bis ${sperreAb(k).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr, danach abgeschlossen.</div>`;
   el.innerHTML = note + kundeFeld('k', k.kunde) + T(S.sel).form(k) + `<div class="foot"><button class="btn sec" id="bPdfOne">PDF dieser Prüfung</button>${lk ? '' : '<button class="btn dan" id="bKdel">Prüfung löschen</button>'}</div>`;
-  if (lk) el.querySelectorAll('[data-k],[data-d],[data-chk],.ar button').forEach(e => { e.disabled = true; });
+  if (lk) el.querySelectorAll('[data-k]:not([data-k^="erledigt"]),[data-d],[data-chk],.ar button').forEach(e => { e.disabled = true; });      // „erledigt“ bleibt offen
 }
 
 // ===== Speichern =====
@@ -343,7 +348,7 @@ function readVal(el) {
 }
 async function commit(el) {
   const t = S.sel, k = kCur(), ds = el.dataset; if (!t) return;
-  if ((ds.chk || ds.k || ds.d) && k && locked(k)) { toast('Diese Prüfung ist abgeschlossen und kann nicht mehr geändert werden', true); renderForm(); return; }
+  if ((ds.chk || ds.k || ds.d) && k && locked(k) && !/^erledigt/.test(ds.k || '')) { toast('Diese Prüfung ist abgeschlossen und kann nicht mehr geändert werden', true); renderForm(); return; }
   if (ds.chk) {
     if (!k) return;
     const bf = new Set(k.daten?.befunde || []); el.checked ? bf.add(ds.chk) : bf.delete(ds.chk);
@@ -365,14 +370,17 @@ async function commit(el) {
     } else el.value = (ds.t ? t[f] : t.stamm?.[f]) ?? '';
   } else if ((ds.k || ds.d) && k) {
     const f = ds.k || ds.d;
+    if (f === 'erledigt_am' && v === undefined) v = null;
     if (v === undefined) { toast(f === 'datum' ? 'Bitte ein Datum angeben' : 'Ungültiger Wert', true); renderForm(); return; }
     const p = ds.k ? { [f]: v } : { daten: { ...k.daten, [f]: v } };
+    if (f === 'erledigt_am') p.erledigt_von = v ? (k.erledigt_von || meName()) : null;       // wer hat erledigt? Angemeldeten Benutzer vorschlagen
     if (await patch('pruefungen', k, p)) {
       if (f === 'pruefer' && v) store.set('bk_pruefer', v);
       if (f === 'datum') S.kons.sort((a, b) => b.datum.localeCompare(a.datum) || b.created_at.localeCompare(a.created_at));
       renderHist();
       await syncSel();            // Datenbank-Trigger übernimmt die Werte der neuesten Prüfung ins Objekt
       if (f === 'kunde') refreshKunden();
+      if (['dringlichkeit', 'erledigt_am', 'datum'].includes(f)) renderForm();
     } else renderForm();
   }
 }
@@ -391,6 +399,11 @@ $('detail').addEventListener('click', async e => {
   switch (b?.id) {
     case 'bBack': return showDash();
     case 'bNew': return newPruefung();
+    case 'bDone': {            // Maßnahme der neuesten Prüfung als erledigt eintragen (geht auch bei abgeschlossener Prüfung)
+      const k = S.kons[0]; if (!k) return;
+      if (await patch('pruefungen', k, { erledigt_am: isoD(today()), erledigt_von: meName() })) { renderHist(); renderForm(); await syncSel(); toast('Maßnahme als erledigt eingetragen'); }
+      return;
+    }
     case 'bPdfAll': return makePdf(t, S.kons, false, 'alle_Pruefungen');
     case 'bPdfLast': return makePdf(t, S.kons.slice(0, 1), false, 'letzte_Pruefung');
     case 'bPdfOne': return makePdf(t, [kCur()], false, 'Pruefung_' + (kCur().datum || ''));
@@ -417,7 +430,8 @@ async function newPruefung() {
   const t = S.sel, last = S.kons[0], Ty = T(t);
   const row = { objekt_id: t.id, datum: isoD(today()) };
   if (last) {            // alle bestehenden Werte der letzten Prüfung übernehmen
-    ['kunde', 'pruefer', 'sicherheit', 'handlungsbedarf', 'massnahmen', 'anmerkungen', 'erledigung_sofort', 'erledigung_wochen'].forEach(f => row[f] = last[f]);
+    ['kunde', 'pruefer', 'sicherheit', 'dringlichkeit', 'massnahmen', 'anmerkungen'].forEach(f => row[f] = last[f]);
+    if (last.erledigt_am || !hatMass(last)) { row.dringlichkeit = 'keine'; if (last.erledigt_am) row.massnahmen = null; }      // erledigte Maßnahme nicht erneut öffnen
     row.daten = JSON.parse(JSON.stringify(last.daten || {}));
     if (row.daten.intervall == null || row.daten.intervall === '') row.daten.intervall = 1;
     row.pruefer = meName() || last.pruefer;
@@ -513,9 +527,9 @@ async function insertObject(f, ll, src) {
 // ===== Menü: CSV (alle Objekte des Typs, auch entfernte) =====
 $('menu').addEventListener('click', e => { if (e.target.closest('button')) $('menu').open = false; });
 $('bCsv').onclick = () => {
-  const Ty = TYPES[S.typ], cols = ['kennung', 'name', 'kunde', 'art', 'strasse', 'hausnummer', 'plz', 'stadt', 'lat', 'lng', 'sicherheit', 'handlungsbedarf', 'massnahmen', 'anmerkungen', 'pruefer', 'letzte_pruefung', 'faellig_am', 'entfernt', 'entfernt_am'];
+  const Ty = TYPES[S.typ], cols = ['kennung', 'name', 'kunde', 'art', 'strasse', 'hausnummer', 'plz', 'stadt', 'lat', 'lng', 'sicherheit', 'dringlichkeit', 'massnahme_faellig', 'erledigt_am', 'erledigt_von', 'massnahmen', 'anmerkungen', 'pruefer', 'letzte_pruefung', 'faellig_am', 'entfernt', 'entfernt_am'];
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const val = (o, c) => c === 'faellig_am' ? (status(o).due ? isoD(status(o).due) : '') : c === 'entfernt' ? (o.entfernt ? 'ja' : '') : o[c];
+  const val = (o, c) => c === 'sicherheit' ? (o.letzte_pruefung ? sich(o.sicherheit).l : '') : c === 'dringlichkeit' ? (hatMass(o) ? dring(o.dringlichkeit).l : '') : c === 'massnahme_faellig' ? (massOffen(o) ? massBisTxt(o.letzte_pruefung, o.dringlichkeit) : '') : c === 'faellig_am' ? (status(o).due ? isoD(status(o).due) : '') : c === 'entfernt' ? (o.entfernt ? 'ja' : '') : o[c];
   const list = sorted(S.objs.filter(o => o.typ === S.typ));
   const lines = [cols.concat(Ty.csv).join(';')].concat(list.map(o => cols.map(c => q(val(o, c))).concat(Ty.csv.map(c => q(o.aktuell?.[c]))).join(';')));
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));

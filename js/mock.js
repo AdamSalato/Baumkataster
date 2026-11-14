@@ -2,7 +2,7 @@
 // Bildet die Datenbank-Automatik aus setup.sql nach: ID-Vergabe, Übernahme der neuesten Prüfung, 12-Stunden-Sperre, Admin-Recht.
 // Anmeldung: admin / admin (Admin) oder pruefer / pruefer (normaler Benutzer).
 function createMock() {
-  const KEY = 'bk_test_db_v4', SESS = 'bk_test_user', listeners = [];
+  const KEY = 'bk_test_db_v5', SESS = 'bk_test_user', listeners = [];
   const USERS = { admin: { pw: 'admin', name: 'Admin', role: 'admin' }, pruefer: { pw: 'pruefer', name: 'P. Prüfer', role: null } };
   const me = () => USERS[localStorage.getItem(SESS)] || null, isAdmin = () => !!me() && me().role === 'admin';
   const gesperrt = k => !isAdmin() && Date.now() - new Date(k.created_at).getTime() > 12 * 36e5;
@@ -13,8 +13,8 @@ function createMock() {
   let db = null, tick = 0, seeding = false;
   const stamp = () => new Date(Date.now() - (seeding ? 5e8 : 0) + (tick++)).toISOString();   // Beispieldaten sind „alt“ und damit gesperrt
 
-  const objDef = p => ({ id: uid(), typ: null, kennung: null, name: null, kunde: null, art: null, strasse: null, hausnummer: null, plz: null, stadt: null, lat: null, lng: null, pos_quelle: 'karte', stamm: {}, aktuell: {}, sicherheit: 'gering', handlungsbedarf: 'nein', pruefer: null, letzte_pruefung: null, massnahmen: null, anmerkungen: null, entfernt: false, entfernt_am: null, created_at: stamp(), ...p });
-  const prDef = p => ({ id: uid(), objekt_id: null, datum: ld(0), pruefer: null, sicherheit: 'gering', handlungsbedarf: 'nein', massnahmen: null, anmerkungen: null, erledigung_sofort: false, erledigung_wochen: null, daten: {}, created_at: stamp(), ...p });
+  const objDef = p => ({ id: uid(), typ: null, kennung: null, name: null, kunde: null, art: null, strasse: null, hausnummer: null, plz: null, stadt: null, lat: null, lng: null, pos_quelle: 'karte', stamm: {}, aktuell: {}, sicherheit: 'sicher', dringlichkeit: 'keine', erledigt_am: null, erledigt_von: null, pruefer: null, letzte_pruefung: null, massnahmen: null, anmerkungen: null, entfernt: false, entfernt_am: null, created_at: stamp(), ...p });
+  const prDef = p => ({ id: uid(), objekt_id: null, datum: ld(0), kunde: null, pruefer: null, sicherheit: 'sicher', dringlichkeit: 'keine', massnahmen: null, erledigt_am: null, erledigt_von: null, anmerkungen: null, daten: {}, created_at: stamp(), ...p });
 
   // entspricht dem Datenbank-Trigger objekt_kennung(): ID vergeben, leere Bezeichnung mit ID füllen
   function kennung(o) {
@@ -28,14 +28,17 @@ function createMock() {
   function sync(bid) {
     const t = db.objekte.find(x => x.id === bid); if (!t) return;
     const n = db.pruefungen.filter(k => k.objekt_id === bid).sort((a, b) => b.datum.localeCompare(a.datum) || b.created_at.localeCompare(a.created_at))[0];
-    if (n) Object.assign(t, { aktuell: clone(n.daten), sicherheit: n.sicherheit, handlungsbedarf: n.handlungsbedarf, kunde: n.kunde, pruefer: n.pruefer, letzte_pruefung: n.datum, massnahmen: n.massnahmen, anmerkungen: n.anmerkungen });
-    else Object.assign(t, { aktuell: {}, sicherheit: 'gering', handlungsbedarf: 'nein', pruefer: null, letzte_pruefung: null, massnahmen: null, anmerkungen: null });
+    if (n) Object.assign(t, { aktuell: clone(n.daten), sicherheit: n.sicherheit, dringlichkeit: n.dringlichkeit, erledigt_am: n.erledigt_am, erledigt_von: n.erledigt_von, kunde: n.kunde, pruefer: n.pruefer, letzte_pruefung: n.datum, massnahmen: n.massnahmen, anmerkungen: n.anmerkungen });
+    else Object.assign(t, { aktuell: {}, sicherheit: 'sicher', dringlichkeit: 'keine', erledigt_am: null, erledigt_von: null, pruefer: null, letzte_pruefung: null, massnahmen: null, anmerkungen: null });
   }
 
   function seed(c) {
     seeding = true;
     const d = { objekttypen: [{ code: 'baum', bezeichnung: 'Baum', praefix: 'B', intervall_monate: 12, zaehler: 0 }], objekte: [], pruefungen: [] }; db = d;
-    const G = 'Gesund', B = 'Stark geschädigt', P = ['M. Becker', 'S. Yilmaz'];
+    const G = '0', B = '3', P = ['M. Becker', 'S. Yilmaz'];
+    const SI = { gering: 'sicher', mittel: 'nach_massnahme', hoch: 'unsicher' };
+    // Dringlichkeit der Beispiel-Maßnahmen je Baum (Index) und ein erledigtes Beispiel
+    const DR = { 1: 'hoch', 3: 'sofort', 5: 'gering', 6: 'pflege', 9: 'sehr_hoch', 10: 'sehr_hoch' }, ERL = { 5: 20 };
     const KD = ['Wohnpark Eisenwerk GmbH', 'Stadt Schwelm', 'Familie Brandt'], kundeVon = str => str === 'Eisenwerkstraße' ? KD[0] : str === 'Brunnenstraße' ? KD[2] : KD[1];
     const spec = [
       ['Eiche Einfahrt', 'Stieleiche (Quercus robur)', 'Eisenwerkstraße', '3', -60, 25, 18.4, 14.0, 310, 'Reifephase', G, 'gering', 'nein', false, 20, [], '', 2],
@@ -61,11 +64,12 @@ function createMock() {
       for (let i = prev; i >= 0; i--) {   // älteste zuerst, damit created_at stimmt
         d.pruefungen.push(prDef({
           objekt_id: t.id, datum: ld(ago + 365 * i), kunde: idx === 3 && i ? 'Hausverwaltung Alt & Partner' : t.kunde, pruefer: P[(i + idx) % 2],
-          sicherheit: i ? (ri === 'hoch' ? 'mittel' : 'gering') : ri, handlungsbedarf: i ? 'nein' : ha,
+          sicherheit: i ? (ri === 'hoch' ? 'nach_massnahme' : 'sicher') : (idx === 6 ? 'unklar' : SI[ri]), dringlichkeit: i ? 'keine' : (DR[idx] || 'keine'),
+          erledigt_am: !i && ERL[idx] ? ld(ERL[idx]) : null, erledigt_von: !i && ERL[idx] ? P[0] : null,
           massnahmen: i ? null : (mass || null), anmerkungen: i ? null : (bef.length ? 'Siehe Regelkontrolle' : null),
           daten: {
             hoehe: h == null ? null : Math.round((h - 0.8 * i) * 10) / 10, breite: br == null ? null : Math.round((br - 0.4 * i) * 10) / 10, umfang: um == null ? null : um - 12 * i,
-            phase: ph, zustand: i ? G : (zu === B && ri !== 'hoch' ? 'Leicht geschädigt' : zu), intervall: 1, prio: !i && idx === 1, abstimmung_fachabt: false, eingehende_untersuchung: false, faellung: i ? false : fa,
+            phase: ph, zustand: i ? G : (zu === B && ri !== 'hoch' ? (idx === 6 ? '2' : '1') : zu), intervall: 1, abstimmung_fachabt: false, eingehende_untersuchung: false, faellung: i ? false : fa,
             befunde: i ? bef.slice(0, Math.max(0, bef.length - 2 * i)) : bef.slice()
           }
         }));
@@ -115,12 +119,13 @@ function createMock() {
             if (!db.objekte.some(t => t.id === r.objekt_id)) throw new Error('Objekt existiert nicht (Fremdschlüssel)');
             if (!r.datum) throw new Error('Datum darf nicht leer sein');
           }
-          if (r.sicherheit && !RISK[r.sicherheit]) throw new Error('Ungültiges Sicherheitsrisiko');
+          if ((r.sicherheit && !SICH[r.sicherheit]) || (r.dringlichkeit && !DRING[r.dringlichkeit])) throw new Error('Ungültiger Wert für Verkehrssicherheit oder Maßnahme');
           rows.push(r); data = [clone(r)]; if (isP) sync(r.objekt_id);
         } else if (this.op === 'update') {
           const tg = rows.filter(m);
-          if (this.p.sicherheit && !RISK[this.p.sicherheit]) throw new Error('Ungültiges Sicherheitsrisiko');
-          if (isP && tg.some(gesperrt)) throw new Error(SPERRE);
+          if ((this.p.sicherheit && !SICH[this.p.sicherheit]) || (this.p.dringlichkeit && !DRING[this.p.dringlichkeit])) throw new Error('Ungültiger Wert für Verkehrssicherheit oder Maßnahme');
+          // gesperrte Prüfung: nur „Maßnahme erledigt“ darf noch eingetragen werden
+          if (isP && tg.some(gesperrt) && !Object.keys(this.p).every(f => f === 'erledigt_am' || f === 'erledigt_von')) throw new Error(SPERRE);
           tg.forEach(r => { const ca = r.created_at; Object.assign(r, clone(this.p)); r.created_at = ca; if (isP) sync(r.objekt_id); }); data = tg.map(clone);
         } else {
           const tg = rows.filter(m);
@@ -150,4 +155,4 @@ function createMock() {
     }
   };
 }
-if ($('bReset')) $('bReset').onclick = () => { if (confirm('Alle Testdaten verwerfen und die Beispieldaten neu laden?')) { localStorage.removeItem('bk_test_db_v4'); location.reload(); } };
+if ($('bReset')) $('bReset').onclick = () => { if (confirm('Alle Testdaten verwerfen und die Beispieldaten neu laden?')) { localStorage.removeItem('bk_test_db_v5'); location.reload(); } };

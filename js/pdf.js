@@ -28,15 +28,28 @@ function makePdf(o, ks, blank, suffix) {
     blank, H, need, box,
     gap: n => { y += n; },
     row(l, v) {
-      if (v && typeof v === 'object') {
-        need(7.5); frame(7.5); doc.text(l, X + 2, y + 4.8); doc.setFont('helvetica', 'normal');
-        let x = X + LW + 3; v.o.forEach(([txt, on]) => { box(x, y + 2.1, on); doc.text(txt, x + 4.8, y + 4.9); x += 4.8 + doc.getTextWidth(txt) + 6; }); y += 7.5; return;
+      if (v && typeof v === 'object') {            // Ankreuzfelder, bei Bedarf über mehrere Zeilen
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+        const lines = [[]], max = W - LW - 6; let x = 0;
+        v.o.forEach(o => { const w = 4.8 + doc.getTextWidth(o[0]) + 6; if (x + w - 6 > max && lines.at(-1).length) { lines.push([]); x = 0; } lines.at(-1).push([o, x]); x += w; });
+        const h = Math.max(7.5, lines.length * 5.2 + 2.3);
+        need(h); frame(h); doc.text(l, X + 2, y + 4.8); doc.setFont('helvetica', 'normal');
+        lines.forEach((ln, i) => ln.forEach(([[txt, on], xx]) => { box(X + LW + 3 + xx, y + 2.1 + i * 5.2, on); doc.text(txt, X + LW + 7.8 + xx, y + 4.9 + i * 5.2); }));
+        y += h; return;
       }
       doc.setFontSize(9); doc.setFont('helvetica', 'normal');
       const ln = doc.splitTextToSize(String(v == null || v === '' ? ' ' : v), W - LW - 5), h = Math.max(7.5, ln.length * 4.2 + 3.4);
       need(h); frame(h); doc.text(l, X + 2, y + 4.8); doc.setFont('helvetica', 'normal'); doc.text(ln, X + LW + 2.5, y + 4.8); y += h;
     },
     opts: (vals, cur) => ({ o: vals.map(v => [v, !blank && cur === v]) }),
+    optsL: (pairs, cur) => ({ o: pairs.map(([v, l]) => [l, !blank && String(cur) === String(v)]) }),          // [[Wert, Bezeichnung], …]
+    // Für alle Objekttypen gleich: Verkehrssicherheit und Maßnahmen einer Prüfung
+    pruefStd(k) {
+      P.row('Verkehrssicherheit:', P.optsL(Object.entries(SICH).map(([v, x]) => [v, x.l]), k.sicherheit));
+      P.row('Maßnahmen:', P.optsL(Object.entries(DRING).map(([v, x]) => [v, x.l]), DRING[k.dringlichkeit] ? k.dringlichkeit : 'keine'));
+      P.row('Maßnahmen Beschreibung:', k.massnahmen);
+      P.row('Maßnahme erledigt am:', blank || !k.erledigt_am ? '' : fmtD(k.erledigt_am) + (k.erledigt_von ? ' (' + k.erledigt_von + ')' : ''));
+    },
     yn: b => ({ o: [['Ja', !blank && !!b], ['Nein', !blank && !b]] }),
     m: (v, d, u) => blank || v == null ? '' : fmtN(v, d) + ' ' + u,
     checklist(groups, bef) {
@@ -63,7 +76,8 @@ function makePdf(o, ks, blank, suffix) {
   if (!blank) {
     y += 3; H('Aktueller Stand');
     P.row('Letzte Prüfung:', fmtD(o.letzte_pruefung)); if (o.entfernt) P.row('Status:', st.label); else P.row('Nächste Prüfung bis:', st.due ? st.due.toLocaleDateString('de-DE') : 'sofort (noch nie geprüft)');
-    P.row('Prüfer:', o.pruefer); P.row('Sicherheitsrisiko:', P.opts(['gering', 'mittel', 'hoch'], o.letzte_pruefung ? o.sicherheit : null));
+    P.row('Prüfer:', o.pruefer); P.row('Verkehrssicherheit:', o.letzte_pruefung ? sich(o.sicherheit).l : '');
+    if (massOffen(o)) P.row('Offene Maßnahme:', `${dring(o.dringlichkeit).l}, ${massFrist(o.letzte_pruefung, o.dringlichkeit)}`);
     Ty.pdf.aktuell(o, P);
   }
   if (blank) ks = [{ datum: null, daten: { befunde: [] } }];
@@ -92,10 +106,12 @@ function listColumns(Ty) {
     ['letzte', 'Letzte Prüfung', 1.4, o => fmtD(o.letzte_pruefung), true, o => status(o).k === 'red' ? '--red' : null],
     ['faellig', 'Nächste Prüfung', 1.4, o => { const s = status(o); return o.entfernt ? '–' : s.due ? s.due.toLocaleDateString('de-DE') : 'sofort'; }, false, o => status(o).k === 'red' ? '--red' : null],
     ['pruefer', 'Prüfer', 1.6, o => o.pruefer || '', false],
-    ['risiko', 'Sicherheitsrisiko', 1.3, o => o.letzte_pruefung ? cap(o.sicherheit) : '', true, o => o.letzte_pruefung && o.sicherheit === 'hoch' ? '--red' : null],
+    ['risiko', 'Verkehrssicherheit', 1.6, o => o.letzte_pruefung ? sich(o.sicherheit).k : '', true, o => o.letzte_pruefung && o.sicherheit === 'unsicher' ? '--red' : null],
     ...Ty.listCols,
-    ['handlung', 'Handlungsbedarf', 1.3, o => o.letzte_pruefung ? cap(o.handlungsbedarf) : '', true],
-    ['massnahmen', 'Maßnahmen', 3.4, o => o.massnahmen || '', true],
+    ['handlung', 'Maßnahme', 1.6, o => o.letzte_pruefung && hatMass(o) ? dring(o.dringlichkeit).k : '', true, o => massOffen(o) && o.dringlichkeit === 'sofort' ? '--red' : null],
+    ['massbis', 'Maßnahme fällig', 1.4, o => massOffen(o) ? cap(massBisTxt(o.letzte_pruefung, o.dringlichkeit).replace('bis ', '')) : '', true],
+    ['massnahmen', 'Maßnahmen Beschreibung', 3.4, o => o.massnahmen || '', true],
+    ['erledigt', 'Erledigt am', 1.3, o => hatMass(o) && o.erledigt_am ? fmtD(o.erledigt_am) : '', false],
     ['anmerkungen', 'Anmerkungen', 3, o => o.anmerkungen || '', false],
     ['status', 'Status', 1.4, o => o.entfernt ? status(o).label : 'Aktiv', false]
   ];
