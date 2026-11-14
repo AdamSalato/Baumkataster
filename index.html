@@ -8,8 +8,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <!-- Nach jeder Änderung an CSS- oder JS-Dateien die Versionsangabe ?v=… in dieser Datei überall hochzählen,
      damit alle Geräte die neuen Dateien laden (sonst mischt der Browser alte und neue Dateien). -->
-<link rel="stylesheet" href="css/theme.css?v=2026-11-14e">
-<link rel="stylesheet" href="css/app.css?v=2026-11-14e">
+<link rel="stylesheet" href="css/theme.css?v=2026-11-14f">
+<link rel="stylesheet" href="css/app.css?v=2026-11-14f">
 </head>
 <body>
 
@@ -25,6 +25,7 @@
 <header id="hd" hidden>
   <h1><img class="logo" alt="" hidden><span class="t appname">Baumkataster</span><span class="chip yel" id="testChip" hidden>Test</span></h1>
   <button class="btn pri big" id="bAdd">+ Neuer Baum</button>
+  <button class="btn ghost" id="bAddG" type="button">+<span class="lbl"> Gruppe</span><span class="lbl-s">G</span></button>
   <button class="btn ghost" id="bList" type="button">📄<span class="lbl"> PDF-Liste</span></button>
   <button class="btn ghost" id="bMap" type="button">🗺<span class="lbl"> Karte ausblenden</span></button>
   <details class="menu" id="menu">
@@ -64,9 +65,10 @@
 <dialog id="dlg">
   <h3 id="dTitleNew">Neuer Baum</h3>
   <label>Name / Bezeichnung (optional)<input id="n_name" type="text" placeholder="z. B. Eiche an der Einfahrt">
-    <span class="hint">Leer lassen: Der Baum erhält automatisch eine ID (z. B. B-113) und wird so benannt.</span></label>
+    <span class="hint" id="n_hint">Leer lassen: Der Baum erhält automatisch eine ID (z. B. B-113) und wird so benannt.</span></label>
   <div class="g2">
     <label>Kunde<input id="n_kunde" type="text" list="kunden" autocomplete="off" placeholder="Tippen oder auswählen"></label>
+    <label id="n_gartl" hidden>Art<select id="n_gart"></select></label>
     <label id="n_artl">Baumart<input id="n_art" type="text" list="baumarten" autocomplete="off" placeholder="Tippen, z. B. Esch …"></label>
     <label id="n_hw">Baumhöhe (m)
       <div class="num"><input id="n_h" type="number" step="0.1" min="0" inputmode="decimal"><span class="ar"><button type="button" data-nstep="0.1" aria-label="10 cm höher">▲</button><button type="button" data-nstep="-0.1" aria-label="10 cm niedriger">▼</button></span></div>
@@ -84,7 +86,7 @@
     <label><input type="radio" name="npos" value="gps"><span>Mein Standort</span></label>
   </div>
   <span class="hint">Die genaue Position lässt sich später jederzeit auf der Karte neu setzen.</span>
-  <label class="ck" style="margin-top:6px"><input id="n_first" type="checkbox" checked>Erste Prüfung gleich anlegen</label>
+  <label class="ck" style="margin-top:6px" id="n_firstl"><input id="n_first" type="checkbox" checked>Erste Prüfung gleich anlegen</label>
   <div class="acts" style="margin-bottom:0"><button class="btn pri" id="nSave">Weiter</button><button class="btn sec" id="nCancel">Abbrechen</button></div>
 </dialog>
 
@@ -99,17 +101,29 @@
   <div class="acts" style="margin-bottom:0"><button class="btn pri" id="lSave">PDF erstellen</button><button class="btn sec" id="lCancel">Abbrechen</button></div>
 </dialog>
 
+<!-- Dialog: mehrere Bäume zu einer Gruppe hinzufügen -->
+<dialog id="dlgG">
+  <h3 id="gaTitle">Bäume hinzufügen</h3>
+  <input id="gaQ" type="search" placeholder="Suchen: ID, Name, Kunde, Art, Adresse" aria-label="Bäume suchen">
+  <div class="linkrow" style="margin-top:8px"><button type="button" id="gaAll">Alle angezeigten auswählen</button><button type="button" id="gaNone">Auswahl aufheben</button><span class="mute" id="gaInfo" style="margin-left:auto"></span></div>
+  <div class="galist" id="gaList"></div>
+  <span class="hint">Tipp: Erst suchen (z. B. Straße oder Kunde), dann „Alle angezeigten auswählen“. Ein Baum gehört immer nur zu einer Gruppe.</span>
+  <div class="acts" style="margin-bottom:0"><button class="btn pri" id="gaSave">Hinzufügen</button><button class="btn sec" id="gaCancel">Abbrechen</button></div>
+</dialog>
+
 <datalist id="kunden"></datalist>
+<datalist id="gruppenDL"></datalist>
 <datalist id="baumarten"></datalist>
 <div id="st" role="status"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="config.js?v=2026-11-14e"></script>
-<script src="js/basis.js?v=2026-11-14e"></script>
-<script src="js/baum.js?v=2026-11-14e"></script>
-<script src="js/pdf.js?v=2026-11-14e"></script>
-<script src="js/app.js?v=2026-11-14e"></script>
+<script src="config.js?v=2026-11-14f"></script>
+<script src="js/basis.js?v=2026-11-14f"></script>
+<script src="js/baum.js?v=2026-11-14f"></script>
+<script src="js/gruppe.js?v=2026-11-14f"></script>
+<script src="js/pdf.js?v=2026-11-14f"></script>
+<script src="js/app.js?v=2026-11-14f"></script>
 </body>
 </html>

@@ -13,7 +13,8 @@ create table if not exists objekttypen (
   zaehler int not null default 0
 );
 insert into objekttypen (code, bezeichnung, praefix, intervall_monate)
-  values ('baum', 'Baum', 'B', 12) on conflict (code) do nothing;
+  values ('baum', 'Baum', 'B', 12), ('gruppe', 'Gruppe', 'G', 12) on conflict (code) do nothing;
+-- 'gruppe' fasst Bäume zusammen (Wald, Park, Allee ...): keine Prüfungen, Angaben stehen direkt am Objekt.
 -- Später z. B.:  insert into objekttypen (code, bezeichnung, praefix, intervall_monate) values ('zaun','Zaun','Z',12);
 
 -- ===== Objekte (aktuell: Bäume) =====
@@ -40,9 +41,11 @@ create table if not exists objekte (
   anmerkungen text,                           -- aus der neuesten Prüfung (automatisch)
   entfernt boolean not null default false,    -- Objekt gibt es nicht mehr (bleibt dokumentiert)
   entfernt_am date,
+  gruppe_id uuid references objekte(id) on delete set null,   -- Baum gehört zu dieser Gruppe (Objekt vom Typ 'gruppe')
   created_at timestamptz not null default now()
 );
 create index if not exists objekte_typ_idx on objekte(typ);
+create index if not exists objekte_gruppe_idx on objekte(gruppe_id);
 create index if not exists objekte_kunde_idx on objekte(kunde);
 
 -- ===== Prüfungen =====

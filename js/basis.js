@@ -43,7 +43,8 @@ const DRING = {
 };
 const dring = v => DRING[v] || DRING.keine;
 const hatMass = x => !!x.dringlichkeit && x.dringlichkeit !== 'keine' && !!DRING[x.dringlichkeit];
-const massOffen = t => !!t.letzte_pruefung && hatMass(t) && !t.erledigt_am;                 // Objekt: Maßnahme der neuesten Prüfung noch offen?
+const bewertet = t => t.typ === 'gruppe' || !!t.letzte_pruefung;                              // Verkehrssicherheit/Maßnahme vorhanden? (Baum: erst mit Prüfung)
+const massOffen = t => bewertet(t) && hatMass(t) && !t.erledigt_am;                 // Objekt: Maßnahme der neuesten Prüfung noch offen?
 const massBis = (datum, d) => { const tg = dring(d).tage; if (tg == null || !datum) return null; const x = parseD(datum); x.setDate(x.getDate() + tg); return x; };
 // als Halbsatz: „sofort fällig“, „fällig bis 10.5.2026“, „ohne Frist“
 const massFrist = (datum, d) => d === 'sofort' ? 'sofort fällig' : massBis(datum, d) ? 'fällig bis ' + massBis(datum, d).toLocaleDateString('de-DE') : 'ohne Frist';
@@ -58,8 +59,9 @@ const seg = (s, f, v, opts, cls = '') => `<div class="seg ${cls}" role="radiogro
 // farbige Auswahl: opts = [[Wert, Bezeichnung, Farbe], …]
 const segC = (s, f, v, opts) => `<div class="seg col" role="radiogroup">${opts.map(([val, l, c]) => `<label class="c-${c}"><input type="radio" name="${s}_${f}" ${A(s, f)} value="${esc(val)}" ${String(v) === String(val) ? 'checked' : ''}><span>${esc(l)}</span></label>`).join('')}</div>`;
 // Maßnahmen-Abschnitt einer Prüfung (für alle Objekttypen gleich)
-const massForm = k => `<h4>Maßnahmen</h4>${segC('k', 'dringlichkeit', DRING[k.dringlichkeit] ? k.dringlichkeit : 'keine', Object.entries(DRING).map(([v, d]) => [v, d.l, d.c]))}`
-  + (hatMass(k) ? `<div class="g2 erl">${field(`Maßnahme erledigt am <span class="unit">(${massFrist(k.datum, k.dringlichkeit)})</span>`, 'k', 'erledigt_am', k.erledigt_am, 'date')}${field('Erledigt von', 'k', 'erledigt_von', k.erledigt_von)}</div>` : '');
+// s = Bereich: 'k' Prüfung (mit Frist ab Prüfdatum), 't' direkt am Objekt (Gruppe)
+const massForm = (k, s = 'k') => `<h4>Maßnahmen</h4>${segC(s, 'dringlichkeit', DRING[k.dringlichkeit] ? k.dringlichkeit : 'keine', Object.entries(DRING).map(([v, d]) => [v, d.l, d.c]))}`
+  + (hatMass(k) ? `<div class="g2 erl">${field('Maßnahme erledigt am' + (s === 'k' ? ` <span class="unit">(${massFrist(k.datum, k.dringlichkeit)})</span>` : ''), s, 'erledigt_am', k.erledigt_am, 'date')}${field('Erledigt von', s, 'erledigt_von', k.erledigt_von)}</div>` : '');
 const num = (l, s, f, v, dec, unit, step) => `<label>${l} <span class="unit">(${unit})</span><div class="num"><input type="number" inputmode="decimal" ${A(s, f)} data-dec="${dec}" step="${step}" min="0" value="${v == null ? '' : v}"><span class="ar"><button type="button" data-step="${step}" aria-label="${l} erhöhen">▲</button><button type="button" data-step="${-step}" aria-label="${l} verringern">▼</button></span></div></label>`;
 
 // ----- Objekttypen: jede Typ-Datei (js/baum.js, später z. B. js/zaun.js) trägt sich hier ein -----
@@ -72,6 +74,7 @@ const T = o => TYPES[o.typ] || TYPES.baum;
 function monthsOf(t) { const y = num0(t.aktuell?.intervall); return y && y > 0 && y <= 10 ? Math.round(y * 12) : T(t).months; }
 function status(t) {
   if (t.entfernt) return { k: 'neu', days: 1e6, due: null, label: 'Entfernt' + (t.entfernt_am ? ' am ' + fmtD(t.entfernt_am) : '') };
+  if (t.typ === 'gruppe') return { k: 'neu', days: -2e6, due: null, label: '' };            // Gruppen haben keine Prüfungen, stehen in der Liste oben
   if (!t.letzte_pruefung) return { k: 'red', days: -1e6, label: 'Noch nie geprüft', due: null };
   const l = parseD(t.letzte_pruefung), due = new Date(l.getFullYear(), l.getMonth() + monthsOf(t), l.getDate());
   const days = Math.round((due - today()) / 864e5);

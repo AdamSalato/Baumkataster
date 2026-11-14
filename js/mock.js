@@ -2,7 +2,7 @@
 // Bildet die Datenbank-Automatik aus setup.sql nach: ID-Vergabe, Übernahme der neuesten Prüfung, 12-Stunden-Sperre, Admin-Recht.
 // Anmeldung: admin / admin (Admin) oder pruefer / pruefer (normaler Benutzer).
 function createMock() {
-  const KEY = 'bk_test_db_v5', SESS = 'bk_test_user', listeners = [];
+  const KEY = 'bk_test_db_v6', SESS = 'bk_test_user', listeners = [];
   const USERS = { admin: { pw: 'admin', name: 'Admin', role: 'admin' }, pruefer: { pw: 'pruefer', name: 'P. Prüfer', role: null } };
   const me = () => USERS[localStorage.getItem(SESS)] || null, isAdmin = () => !!me() && me().role === 'admin';
   const gesperrt = k => !isAdmin() && Date.now() - new Date(k.created_at).getTime() > 12 * 36e5;
@@ -13,7 +13,7 @@ function createMock() {
   let db = null, tick = 0, seeding = false;
   const stamp = () => new Date(Date.now() - (seeding ? 5e8 : 0) + (tick++)).toISOString();   // Beispieldaten sind „alt“ und damit gesperrt
 
-  const objDef = p => ({ id: uid(), typ: null, kennung: null, name: null, kunde: null, art: null, strasse: null, hausnummer: null, plz: null, stadt: null, lat: null, lng: null, pos_quelle: 'karte', stamm: {}, aktuell: {}, sicherheit: 'sicher', dringlichkeit: 'keine', erledigt_am: null, erledigt_von: null, pruefer: null, letzte_pruefung: null, massnahmen: null, anmerkungen: null, entfernt: false, entfernt_am: null, created_at: stamp(), ...p });
+  const objDef = p => ({ id: uid(), typ: null, kennung: null, name: null, kunde: null, art: null, strasse: null, hausnummer: null, plz: null, stadt: null, lat: null, lng: null, pos_quelle: 'karte', gruppe_id: null, stamm: {}, aktuell: {}, sicherheit: 'sicher', dringlichkeit: 'keine', erledigt_am: null, erledigt_von: null, pruefer: null, letzte_pruefung: null, massnahmen: null, anmerkungen: null, entfernt: false, entfernt_am: null, created_at: stamp(), ...p });
   const prDef = p => ({ id: uid(), objekt_id: null, datum: ld(0), kunde: null, pruefer: null, sicherheit: 'sicher', dringlichkeit: 'keine', massnahmen: null, erledigt_am: null, erledigt_von: null, anmerkungen: null, daten: {}, created_at: stamp(), ...p });
 
   // entspricht dem Datenbank-Trigger objekt_kennung(): ID vergeben, leere Bezeichnung mit ID füllen
@@ -34,7 +34,7 @@ function createMock() {
 
   function seed(c) {
     seeding = true;
-    const d = { objekttypen: [{ code: 'baum', bezeichnung: 'Baum', praefix: 'B', intervall_monate: 12, zaehler: 0 }], objekte: [], pruefungen: [] }; db = d;
+    const d = { objekttypen: [{ code: 'baum', bezeichnung: 'Baum', praefix: 'B', intervall_monate: 12, zaehler: 0 }, { code: 'gruppe', bezeichnung: 'Gruppe', praefix: 'G', intervall_monate: 12, zaehler: 0 }], objekte: [], pruefungen: [] }; db = d;
     const G = '0', B = '3', P = ['M. Becker', 'S. Yilmaz'];
     const SI = { gering: 'sicher', mittel: 'nach_massnahme', hoch: 'unsicher' };
     // Dringlichkeit der Beispiel-Maßnahmen je Baum (Index) und ein erledigtes Beispiel
@@ -76,6 +76,10 @@ function createMock() {
       }
       sync(t.id);
     });
+    // Beispiel-Gruppen: Bäume „Am Park“ und die Allee in der Hauptstraße
+    const grp = (name, art, str, kunde, extra) => { const m = d.objekte.filter(o => o.strasse === str), g = objDef({ typ: 'gruppe', name, art, kunde, strasse: str, plz: '58332', stadt: 'Schwelm', lat: m.reduce((a, o) => a + o.lat, 0) / m.length + 0.00012, lng: m.reduce((a, o) => a + o.lng, 0) / m.length, pos_quelle: 'karte', ...extra }); kennung(g); d.objekte.push(g); m.forEach(o => { o.gruppe_id = g.id; }); };
+    grp('Parkanlage Am Park', 'Park', 'Am Park', KD[1], { sicherheit: 'nach_massnahme', dringlichkeit: 'hoch', massnahmen: 'Wege freischneiden, Totholz im Bestand entfernen', anmerkungen: 'Zugang über das Tor an der Nordseite' });
+    grp('Allee Hauptstraße', 'Allee', 'Hauptstraße', KD[1], {});
     seeding = false;
     return d;
   }
@@ -94,6 +98,7 @@ function createMock() {
     update(p) { this.op = 'update'; this.p = p; this.ret = false; return this; }
     delete() { this.op = 'delete'; this.ret = false; return this; }
     eq(c, v) { this.f.push([c, v]); return this; }
+    in(c, l) { this.f.push([c, l, true]); return this; }
     order(c, opt) { this.o.push([c, !(opt && opt.ascending === false)]); return this; }
     range(a, b) { this.r = [a, b]; return this; }
     single() { this.one = true; return this; }
@@ -101,7 +106,7 @@ function createMock() {
     async run() {
       await ready;
       try {
-        const rows = db[this.t], isO = this.t === 'objekte', isP = this.t === 'pruefungen', m = r => this.f.every(([c, v]) => r[c] === v);
+        const rows = db[this.t], isO = this.t === 'objekte', isP = this.t === 'pruefungen', m = r => this.f.every(([c, v, many]) => many ? v.includes(r[c]) : r[c] === v);
         let data;
         if (this.op === 'select') {
           data = rows.filter(m).map(clone);
@@ -132,7 +137,8 @@ function createMock() {
           if (isP && tg.some(gesperrt)) throw new Error(SPERRE);
           if (isO && db.pruefungen.some(k => gesperrt(k) && tg.some(t => t.id === k.objekt_id))) throw new Error(SPERRE);
           db[this.t] = rows.filter(r => !tg.includes(r)); data = tg.map(clone);
-          if (isO) db.pruefungen = db.pruefungen.filter(k => !tg.some(t => t.id === k.objekt_id)); else if (isP) tg.forEach(k => sync(k.objekt_id));
+          if (isO) { db.pruefungen = db.pruefungen.filter(k => !tg.some(t => t.id === k.objekt_id)); db.objekte.forEach(o => { if (tg.some(t => t.id === o.gruppe_id)) o.gruppe_id = null; }); }      // on delete cascade / set null
+          else if (isP) tg.forEach(k => sync(k.objekt_id));
         }
         save();
         if (!this.ret) return { data: null, error: null };
@@ -155,4 +161,4 @@ function createMock() {
     }
   };
 }
-if ($('bReset')) $('bReset').onclick = () => { if (confirm('Alle Testdaten verwerfen und die Beispieldaten neu laden?')) { localStorage.removeItem('bk_test_db_v5'); location.reload(); } };
+if ($('bReset')) $('bReset').onclick = () => { if (confirm('Alle Testdaten verwerfen und die Beispieldaten neu laden?')) { localStorage.removeItem('bk_test_db_v6'); location.reload(); } };

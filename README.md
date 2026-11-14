@@ -17,6 +17,7 @@ Webanwendung für Baumkontrollen im GaLaBau: Bäume auf der Karte erfassen, Prü
 - Bäume als „Entfernt“ markieren (bleiben dokumentiert, eigene Kachel)
 - Verkehrssicherheit in vier Stufen und Vitalitätsstufen 0–4
 - Maßnahmen mit Dringlichkeit und Frist, „erledigt am“ und Kachel „Offene Maßnahmen“
+- Gruppen (Wald, Park, Allee …): Bäume zusammenfassen, mehrere auf einmal hinzufügen, im Dashboard ein- und ausblendbar
 - Regelkontrolle mit Checkliste und Prüfhistorie
 - PDF-Protokoll (letzte Prüfung, alle Prüfungen oder eine einzelne Prüfung)
 - PDF-Liste der aktuellen Auswahl als Tabelle mit frei wählbaren Spalten
@@ -35,12 +36,13 @@ Webanwendung für Baumkontrollen im GaLaBau: Bäume auf der Karte erfassen, Prü
 | `css/app.css` | Aufbau und Layout |
 | `js/basis.js` | Helfer, Formular-Bausteine, Prüfstatus |
 | `js/baum.js` | Objekttyp Baum: Felder, Formular, Baumarten-Liste |
+| `js/gruppe.js` | Gruppen: Ansicht, Liste der Bäume, Auswahlliste der Gruppen-Arten |
 | `js/app.js` | Anmeldung, Karte, Dashboard, Detailseite |
 | `js/pdf.js` | PDF-Protokoll und PDF-Liste |
 | `js/mock.js` | Testversion ohne Datenbank |
 | `test.html` | Öffnet die Testversion (`index.html?test`), Login `admin` / `admin` oder `pruefer` / `pruefer` |
 | `setup.sql` | Neue Datenbank in Supabase einrichten |
-| `update_2026-11.sql`, `update_2026-11b.sql`, `update_2026-11c.sql` | Bestehende Datenbank aktualisieren (ohne Datenverlust), in dieser Reihenfolge |
+| `update_2026-11.sql`, `update_2026-11b.sql`, `update_2026-11c.sql`, `update_2026-11d.sql` | Bestehende Datenbank aktualisieren (ohne Datenverlust), in dieser Reihenfolge |
 
 ## Aussehen anpassen
 

@@ -3,7 +3,7 @@
 const TEST = /[?&]test\b/i.test(location.search);       // index.html?test = Testversion ohne Datenbank (js/mock.js)
 let sb, map, layer, geoPin, homeLL = null;
 const markers = new Map();
-const S = { objs: [], sel: null, kons: [], kid: null, typ: 'baum', filter: 'all', sort: { k: 'dring', dir: 1 }, q: '', mode: 'pruef', tool: null, draft: null, me: null, admin: false };
+const S = { objs: [], sel: null, kons: [], kid: null, typ: 'baum', gruppen: store.get('bk_gruppen') !== '0', filter: 'all', sort: { k: 'dring', dir: 1 }, q: '', mode: 'pruef', tool: null, draft: null, me: null, admin: false };
 const kCur = () => S.kons.find(k => k.id === S.kid);
 const locked = k => !S.admin && abgelaufen(k);            // für den angemeldeten Benutzer gesperrt?
 const noMap = () => document.body.classList.contains('nomap');
@@ -59,7 +59,7 @@ async function loadObjs() {
     if (error) { toast('Laden fehlgeschlagen: ' + error.message, true); return false; }
     all = all.concat(data); if (data.length < 1000) break; from += 1000;
   }
-  S.objs = all; refreshKunden(); return true;
+  S.objs = all; refreshKunden(); refreshGruppen(); return true;
 }
 async function start() {
   $('login').hidden = true; $('hd').hidden = $('app').hidden = false;
@@ -140,16 +140,17 @@ function setMode(m) { S.mode = m; $('mP').classList.toggle('on', m === 'pruef');
 $('mP').onclick = () => setMode('pruef'); $('mR').onclick = () => setMode('risk');
 function renderLegend() {
   const it = S.mode === 'risk' ? Object.values(SICH).map(x => [x.c, x.k]) : [['grn', 'Prüfung ok'], ['yel', '≤ 3 Monate'], ['org', '≤ 1 Monat'], ['red', 'überfällig']];
-  $('legend').innerHTML = it.map(([c, t]) => `<span><i style="background:${mcol(c)}"></i>${t}</span>`).join('');
+  $('legend').innerHTML = it.map(([c, t]) => `<span><i style="background:${mcol(c)}"></i>${t}</span>`).join('') + (S.gruppen && S.objs.some(istGruppe) ? `<span><i style="background:${cssVar('--blu')};border-radius:3px"></i>Gruppe</span>` : '');
 }
 function mStyle(t) {
+  if (istGruppe(t)) { const on = S.sel && S.sel.id === t.id; return { radius: on ? 15 : 12, color: on ? '#111' : '#fff', weight: on ? 4 : 3, fillColor: t.entfernt ? mcol('neu') : cssVar('--blu'), fillOpacity: 1 }; }
   const on = S.sel && S.sel.id === t.id, col = mcol(t.entfernt ? 'neu' : S.mode === 'risk' ? (t.letzte_pruefung ? sich(t.sicherheit).c : 'neu') : status(t).k);
   return { radius: on ? 13 : 10, color: on ? '#111' : '#fff', weight: on ? 4 : 2, fillColor: col, fillOpacity: 1 };
 }
 function renderMarkers() {
   if (!layer) return; layer.clearLayers(); markers.clear();
   S.objs.filter(visible).forEach(t => {
-    const m = L.circleMarker([t.lat, t.lng], mStyle(t)).bindTooltip(`${esc(t.kennung)}${t.name !== t.kennung ? ' · ' + esc(t.name) : ''}${t.kunde ? ' · ' + esc(t.kunde) : ''}${t.entfernt ? ' (entfernt)' : ''}`).on('click', ev => { L.DomEvent.stopPropagation(ev); if (S.tool) return mapClick(ev.latlng); select(t.id); });
+    const m = L.circleMarker([t.lat, t.lng], mStyle(t)).bindTooltip(`${istGruppe(t) ? 'Gruppe ' : ''}${esc(t.kennung)}${t.name !== t.kennung ? ' · ' + esc(t.name) : ''}${t.kunde ? ' · ' + esc(t.kunde) : ''}${t.entfernt ? ' (entfernt)' : ''}`).on('click', ev => { L.DomEvent.stopPropagation(ev); if (S.tool) return mapClick(ev.latlng); select(t.id); });
     m.addTo(layer); markers.set(t.id, m);
   });
   if (S.sel) markers.get(S.sel.id)?.bringToFront();
@@ -168,14 +169,17 @@ const FILTER = {
   all: ['', t => true, ''],
   red: ['Überfällig', t => status(t).k === 'red', 'red'],
   yel: ['Fällig ≤ 3 Monate', faelligBald, 'yel'],
-  risk: ['Nicht verkehrssicher', t => t.sicherheit === 'unsicher' && !!t.letzte_pruefung, 'red'],
+  risk: ['Nicht verkehrssicher', t => t.sicherheit === 'unsicher' && bewertet(t), 'red'],
   mass: ['Offene Maßnahmen', massOffen, 'org'],
   fael: ['Fällung nötig', t => T(t).isFlagged(t), ''],
   ent: ['Entfernt', t => true, 'off']
 };
-const matchQ = t => { const q = S.q.toLowerCase().trim(); return !q || [t.kennung, t.name, t.kunde, t.art, t.strasse, t.hausnummer, t.plz, t.stadt, t.pruefer].join(' ').toLowerCase().includes(q); };
+// Suchtext eines Eintrags; bei Bäumen zählt auch die Gruppe mit (Suche nach „G-001“ findet deren Bäume)
+const suchText = t => { const g = gruppeVon(t); return [t.kennung, t.name, t.kunde, t.art, t.strasse, t.hausnummer, t.plz, t.stadt, t.pruefer, g && g.kennung, g && g.name].join(' ').toLowerCase(); };
+const matchQ = t => { const q = S.q.toLowerCase().trim(); return !q || suchText(t).includes(q); };
+const inList = t => t.typ === S.typ || (S.gruppen && istGruppe(t));            // Gruppen stehen mit in der Liste, solange sie eingeblendet sind
 const matchF = t => S.filter === 'ent' ? !!t.entfernt : !t.entfernt && (FILTER[S.filter] || FILTER.all)[1](t);
-const visible = t => t.typ === S.typ && ((S.sel && S.sel.id === t.id) || (matchQ(t) && matchF(t)));
+const visible = t => (S.sel && (S.sel.id === t.id || (istGruppe(S.sel) && t.gruppe_id === S.sel.id))) || (inList(t) && matchQ(t) && matchF(t));
 function sorted(list) {
   const dir = S.sort.dir, k = S.filter === 'mass' && S.sort.k === 'dring' ? 'mass' : S.sort.k, ds = t => status(t).days, rk = t => sich(t.sicherheit).rank,
     mb = t => { const d = massBis(t.letzte_pruefung, t.dringlichkeit); return d ? d.getTime() : 9e15; }, str = (a, b) => String(a ?? '').localeCompare(String(b ?? ''), 'de', { numeric: true });
@@ -192,7 +196,7 @@ function sorted(list) {
   return list.slice().sort((a, b) => cmp(a, b) * dir);
 }
 // Die Liste genau so, wie sie im Dashboard steht (für Tabelle und PDF-Liste)
-const currentList = () => sorted(S.objs.filter(t => t.typ === S.typ && matchQ(t) && matchF(t)));
+const currentList = () => sorted(S.objs.filter(t => inList(t) && matchQ(t) && matchF(t)));
 function filterText() {
   const TT = TYPES[S.typ], p = [S.filter === 'all' ? 'Alle ' + TT.plural : FILTER[S.filter][0]];
   if (S.q.trim()) p.push(`Suche: „${S.q.trim()}“`);
@@ -211,20 +215,24 @@ function renderDash() {
   const chips = Object.entries(FILTER).map(([k, [l, f, cls]]) => k === 'all' ? [k, 'Alle ' + TT.plural, akt.length, ''] : k === 'ent' ? [k, l, pool.length - akt.length, cls] : [k, l, n(f), k === 'risk' && nRisk ? 'rdk' : cls]);
   const list = currentList();
   const th = (k, l, cls = '') => `<th class="${cls}"><button data-sort="${k}" aria-label="Sortieren nach ${l}">${l}${S.sort.k === k ? (S.sort.dir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`;
+  const dash = '<span class="mute">–</span>';
   const rows = list.map(t => {
-    const st = status(t), nm = t.name && t.name !== t.kennung ? esc(t.name) : '<span class="mute">–</span>';
-    return `<tr class="r${t.entfernt ? ' off' : ''}" data-id="${t.id}" tabindex="0"><td class="idc">${esc(t.kennung)}</td>
-    <td><b>${nm}</b>${t.entfernt ? '<span class="badge off">Entfernt</span>' : T(t).badges(t) + (massOffen(t) ? `<span class="badge ${dring(t.dringlichkeit).c}">Maßnahme: ${dring(t.dringlichkeit).k}</span>` : '')}<small>${esc([t.art, addr(t)].filter(Boolean).join(' · '))}${massOffen(t) && !t.entfernt && S.filter === 'mass' ? `<br><b>Maßnahme ${massFrist(t.letzte_pruefung, t.dringlichkeit)}</b>${t.massnahmen ? ': ' + esc(t.massnahmen) : ''}` : ''}</small></td>
-    <td class="hide-xs">${t.kunde ? esc(t.kunde) : '<span class="mute">–</span>'}</td>
-    <td><span class="chip ${st.k}">${fmtD(t.letzte_pruefung)}</span><small>${st.label}</small></td>
-    <td class="hide-s nw">${esc(t.pruefer || '–')}</td>
-    <td>${t.letzte_pruefung ? `<span class="chip ${t.entfernt ? 'neu' : sich(t.sicherheit).c}">${sich(t.sicherheit).k}</span>` : '<span class="mute">–</span>'}</td>
-    <td class="hide-s nw">${T(t).keyFmt(T(t).keyValue(t))}</td></tr>`;
+    const st = status(t), isG = istGruppe(t), g = gruppeVon(t), nm = t.name && t.name !== t.kennung ? esc(t.name) : dash;
+    const badges = (isG ? `<span class="badge blu">Gruppe · ${nBaeume(mitglieder(t).filter(o => !o.entfernt).length)}</span>` : '') + (t.entfernt ? '<span class="badge off">Entfernt</span>' : T(t).badges(t) + (massOffen(t) ? `<span class="badge ${dring(t.dringlichkeit).c}">Maßnahme: ${dring(t.dringlichkeit).k}</span>` : ''));
+    const massZeile = massOffen(t) && !t.entfernt && S.filter === 'mass' ? `<br><b>${isG ? dring(t.dringlichkeit).l : 'Maßnahme ' + massFrist(t.letzte_pruefung, t.dringlichkeit)}</b>${t.massnahmen ? ': ' + esc(t.massnahmen) : ''}` : '';
+    return `<tr class="r${isG ? ' grp' : ''}${t.entfernt ? ' off' : ''}" data-id="${t.id}" tabindex="0"><td class="idc">${esc(t.kennung)}</td>
+    <td><b>${nm}</b>${badges}<small>${esc([t.art, addr(t), g && 'Gruppe ' + gLabel(g)].filter(Boolean).join(' · '))}${massZeile}</small></td>
+    <td class="hide-xs">${t.kunde ? esc(t.kunde) : dash}</td>
+    <td>${isG ? dash : `<span class="chip ${st.k}">${fmtD(t.letzte_pruefung)}</span><small>${st.label}</small>`}</td>
+    <td class="hide-s nw">${isG ? dash : esc(t.pruefer || '–')}</td>
+    <td>${bewertet(t) ? `<span class="chip ${t.entfernt ? 'neu' : sich(t.sicherheit).c}">${sich(t.sicherheit).k}</span>` : dash}</td>
+    <td class="hide-s nw">${isG ? dash : T(t).keyFmt(T(t).keyValue(t))}</td></tr>`;
   }).join('');
-  const types = Object.keys(TYPES).length > 1 ? `<select id="typSel" aria-label="Objekttyp">${Object.entries(TYPES).map(([c, v]) => `<option value="${c}" ${c === S.typ ? 'selected' : ''}>${v.plural}</option>`).join('')}</select>` : '';
+  const haupt = Object.entries(TYPES).filter(([c, v]) => !v.nurGruppe);
+  const types = haupt.length > 1 ? `<select id="typSel" aria-label="Objekttyp">${haupt.map(([c, v]) => `<option value="${c}" ${c === S.typ ? 'selected' : ''}>${v.plural}</option>`).join('')}</select>` : '';
   $('dash').innerHTML = `
   <div class="sum">${chips.map(([k, l, c, cls]) => `<button class="${cls}${S.filter === k ? ' on' : ''}" data-f="${k}" aria-pressed="${S.filter === k}"><b>${c}</b><span>${l}</span></button>`).join('')}</div>
-  <div class="bar">${types}<input id="q" type="search" placeholder="Suchen: ID, Name, Kunde, Art, Adresse, Prüfer" value="${esc(S.q)}" aria-label="Suchen"></div>
+  <div class="bar">${types}<input id="q" type="search" placeholder="Suchen: ID, Name, Kunde, Art, Adresse, Prüfer, Gruppe" value="${esc(S.q)}" aria-label="Suchen"><label class="ck tog"><input type="checkbox" id="gTog" ${S.gruppen ? 'checked' : ''}>Gruppen anzeigen</label></div>
   <div class="card tbl"><div class="sc"><table><thead><tr>${th('id', 'ID')}${th('name', 'Name')}${th('kunde', 'Kunde', 'hide-xs')}${th('dring', 'Letzte Prüfung')}${th('pruefer', 'Prüfer', 'hide-s')}${th('risk', 'Verkehrssicherheit')}${th('key', TT.keyLabel.replace('Baumhöhe', 'Höhe'), 'hide-s')}</tr></thead>
   <tbody>${rows}</tbody></table>${rows ? '' : `<div class="empty">${pool.length ? 'Keine Treffer für diese Auswahl.' : `Noch keine ${TT.plural} erfasst. Mit „+ Neuer ${TT.label}“ den ersten anlegen.`}</div>`}</div></div>`;
 }
@@ -242,6 +250,7 @@ $('dash').addEventListener('input', e => {
 });
 $('dash').addEventListener('change', e => {
   if (e.target.id === 'typSel') { S.typ = e.target.value; S.filter = 'all'; renderDash(); renderMarkers(); }
+  if (e.target.id === 'gTog') { S.gruppen = e.target.checked; store.set('bk_gruppen', S.gruppen ? '1' : '0'); renderDash(); renderMarkers(); renderLegend(); }
 });
 
 // ===== Auswahl & Detail =====
@@ -252,14 +261,19 @@ async function loadKons(id) {
 }
 async function select(id) {
   const t = S.objs.find(x => x.id === id); if (!t) return;
-  const kons = await loadKons(id);
-  S.sel = t; S.kons = kons; S.kid = kons[0]?.id ?? null; S.typ = t.typ;
+  const isG = istGruppe(t), kons = isG ? [] : await loadKons(id);
+  S.sel = t; S.kons = kons; S.kid = kons[0]?.id ?? null; if (!isG) S.typ = t.typ;
   $('dash').hidden = true; $('detail').hidden = false;
-  renderDetail(); renderMarkers();
-  if (!noMap()) map.setView([t.lat, t.lng], Math.max(map.getZoom(), 18));
+  rerender(); renderMarkers();
+  if (!noMap()) {
+    const m = isG ? mitglieder(t) : [];
+    if (m.length) map.fitBounds(m.concat(t).map(o => [o.lat, o.lng]), { maxZoom: 18, padding: [50, 50] });      // Gruppe: alle ihre Bäume zeigen
+    else map.setView([t.lat, t.lng], Math.max(map.getZoom(), 18));
+  }
   $('panel').scrollTop = 0;
   if (mobile()) $('detail').scrollIntoView({ block: 'start' });
 }
+const rerender = () => istGruppe(S.sel) ? renderGruppe() : renderDetail();
 const putObj = t => { const i = S.objs.findIndex(x => x.id === t.id); if (i >= 0) S.objs[i] = t; };
 async function syncSel() {
   const { data } = await sb.from('objekte').select('*').eq('id', S.sel.id).single();
@@ -296,6 +310,7 @@ function renderPos() {
   $('posInfo').textContent = `Position ${t.lat.toFixed(6)}, ${t.lng.toFixed(6)}, ${q}`;
 }
 function renderFacts() {
+  if (istGruppe(S.sel)) return renderGFacts();
   const t = S.sel, st = status(t), has = !!t.letzte_pruefung, Ty = T(t);
   const fl = Ty.flags(t), offen = massOffen(t);
   if (offen) fl.unshift([dring(t.dringlichkeit).c, `Maßnahme offen: ${dring(t.dringlichkeit).l}, ${massFrist(t.letzte_pruefung, t.dringlichkeit)}`]);
@@ -306,6 +321,7 @@ function renderFacts() {
     <div class="tile ${st.k}"><span class="lb">Letzte Prüfung</span><b class="big">${fmtD(t.letzte_pruefung)}</b><small>${st.label}${t.pruefer ? ' · ' + esc(t.pruefer) : ''}</small></div>
     <div class="tile ${has && !t.entfernt ? sich(t.sicherheit).c : ''}"><span class="lb">Verkehrssicherheit</span><b class="big${has ? ' txt' : ''}">${has ? sich(t.sicherheit).l : '–'}</b></div></div>
   <div class="flags">${fl.map(([c, x]) => `<span class="chip ${c}">${esc(x)}</span>`).join('')}</div>
+  ${gruppeFeld(t)}
   <div class="acts"><button class="btn pri big" id="bNew">+ Neue Prüfung</button>${offen ? '<button class="btn sec big" id="bDone">✓ Maßnahme erledigt</button>' : ''}<button class="btn sec" id="bPdfLast">PDF (nur letzte Prüfung)</button><button class="btn sec" id="bPdfAll">PDF (alle Prüfungen)</button></div>`;
 }
 function renderHist() {
@@ -355,12 +371,15 @@ async function commit(el) {
   if (ds.t || ds.s) {
     const f = ds.t || ds.s;
     if (ds.t === 'name' && !v) v = t.kennung;            // leere Bezeichnung: ID als Name
-    if (v === undefined) { toast('Ungültiger Wert', true); renderDetail(); return; }
+    if (f === 'erledigt_am' && v === undefined) v = null;
+    if (v === undefined) { toast('Ungültiger Wert', true); rerender(); return; }
     const p = ds.t ? { [f]: v } : { stamm: { ...t.stamm, [f]: v } };
+    if (ds.t === 'erledigt_am') p.erledigt_von = v ? (t.erledigt_von || meName()) : null;
     if (await patch('objekte', t, p)) {
       if (ds.t === 'name') el.value = t.name;
       putObj(t); renderHead(); renderMarkers();
       if (ds.t === 'kunde') refreshKunden();
+      if (istGruppe(t)) { renderGFacts(); if (f === 'name') refreshGruppen(); if (['dringlichkeit', 'erledigt_am'].includes(f)) renderGForm(); }
     } else el.value = (ds.t ? t[f] : t.stamm?.[f]) ?? '';
   } else if ((ds.k || ds.d) && k) {
     const f = ds.k || ds.d;
@@ -379,7 +398,11 @@ async function commit(el) {
   }
 }
 const stepTimers = new WeakMap();
-$('detail').addEventListener('change', e => { if (e.target.matches('[data-k],[data-d],[data-t],[data-s],[data-chk]')) commit(e.target); });
+$('detail').addEventListener('change', e => {
+  if (e.target.id === 'grpIn') { const g = findeGruppe(e.target.value); if (g) setGruppe(S.sel, g); else if (e.target.value.trim()) toast('Keine eindeutige Gruppe gefunden. Bitte aus den Vorschlägen wählen.', true); return; }
+  if (e.target.matches('[data-k],[data-d],[data-t],[data-s],[data-chk]')) commit(e.target);
+});
+$('detail').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('.mrow')) select(e.target.dataset.mid); });
 $('detail').addEventListener('click', async e => {
   const t = S.sel, b = e.target.closest('button'); if (!t) return;
   if (b?.dataset.step) {                       // ▲▼: Höhe/Krone in 10-cm-Schritten, Umfang in 1 cm
@@ -390,9 +413,20 @@ $('detail').addEventListener('click', async e => {
   }
   const row = e.target.closest('[data-kid]');
   if (row) { S.kid = row.dataset.kid; renderHist(); renderForm(); return; }
+  if (b?.dataset.mx) {                         // Gruppenansicht: Baum aus der Gruppe nehmen
+    const o = objById(b.dataset.mx);
+    if (o && await patch('objekte', o, { gruppe_id: null })) { renderGFacts(); renderGList(); renderMarkers(); toast(`${o.kennung} aus der Gruppe entfernt`); }
+    return;
+  }
+  const mrow = e.target.closest('[data-mid]');
+  if (mrow) return select(mrow.dataset.mid);
   switch (b?.id) {
     case 'bBack': return showDash();
     case 'bNew': return newPruefung();
+    case 'bGrp': return select(t.gruppe_id);
+    case 'bGrpX': return setGruppe(t, null);
+    case 'bGAdd': return openGAdd();
+    case 'bGPdf': return openList(sorted(mitglieder(t)), `Gruppe ${gLabel(t)}${t.kunde ? ' · Kunde: ' + t.kunde : ''}`, 'Baumliste ' + t.kennung);
     case 'bDone': {            // Maßnahme der neuesten Prüfung als erledigt eintragen (geht auch bei abgeschlossener Prüfung)
       const k = S.kons[0]; if (!k) return;
       if (await patch('pruefungen', k, { erledigt_am: isoD(today()), erledigt_von: meName() })) { renderHist(); renderForm(); await syncSel(); toast('Maßnahme als erledigt eingetragen'); }
@@ -405,8 +439,8 @@ $('detail').addEventListener('click', async e => {
     case 'bGeoAddr': return posFromAddress();
     case 'bEnt': {
       const on = !t.entfernt;
-      if (on && !confirm(`${t.kennung} als entfernt markieren?\n\nDer Eintrag bleibt mit allen Prüfungen gespeichert, erscheint aber nur noch unter „Entfernt“.`)) return;
-      if (await patch('objekte', t, { entfernt: on, entfernt_am: on ? isoD(today()) : null })) { putObj(t); renderDetail(); renderMarkers(); toast(on ? 'Als entfernt markiert' : 'Wieder aktiv'); }
+      if (on && !confirm(`${t.kennung} als entfernt markieren?\n\nDer Eintrag bleibt gespeichert, erscheint aber nur noch unter „Entfernt“.`)) return;
+      if (await patch('objekte', t, { entfernt: on, entfernt_am: on ? isoD(today()) : null })) { putObj(t); rerender(); renderMarkers(); refreshGruppen(); toast(on ? 'Als entfernt markiert' : 'Wieder aktiv'); }
       return;
     }
     case 'bKdel':
@@ -415,9 +449,9 @@ $('detail').addEventListener('click', async e => {
         S.kons = S.kons.filter(x => x.id !== S.kid); S.kid = S.kons[0]?.id ?? null; renderHist(); renderForm(); await syncSel(); toast('Prüfung gelöscht'); }
       return;
     case 'bDel':
-      if (!confirm(`${t.kennung}${t.name !== t.kennung ? ' (' + t.name + ')' : ''} mit allen Prüfungen endgültig löschen?\n\nTipp: Nicht mehr vorhandene Objekte lieber „Als entfernt markieren“, dann bleibt die Dokumentation erhalten.`)) return;
+      if (!confirm(istGruppe(t) ? `Gruppe ${gLabel(t)} endgültig löschen?\n\nDie ${nBaeume(mitglieder(t).length)} der Gruppe bleiben erhalten.` : `${t.kennung}${t.name !== t.kennung ? ' (' + t.name + ')' : ''} mit allen Prüfungen endgültig löschen?\n\nTipp: Nicht mehr vorhandene Objekte lieber „Als entfernt markieren“, dann bleibt die Dokumentation erhalten.`)) return;
       { const { error } = await sb.from('objekte').delete().eq('id', t.id); if (error) return toast('Löschen fehlgeschlagen: ' + error.message, true);
-        S.objs = S.objs.filter(x => x.id !== t.id); refreshKunden(); showDash(); toast('Gelöscht'); }
+        S.objs = S.objs.filter(x => x.id !== t.id); S.objs.forEach(o => { if (o.gruppe_id === t.id) o.gruppe_id = null; }); refreshKunden(); refreshGruppen(); showDash(); toast('Gelöscht'); }
   }
 });
 async function newPruefung() {
@@ -445,7 +479,7 @@ function setTool(tool) {
   S.tool = tool; $('map').style.cursor = tool ? 'crosshair' : ''; $('pick').hidden = !tool;
   if (tool) {
     setMapVisible(true);
-    $('pickTxt').textContent = tool === 'add' ? 'Position des neuen Objekts auf der Karte antippen' : `Neue Position für ${S.sel?.kennung} antippen`;
+    $('pickTxt').textContent = tool === 'add' ? (S.draft && S.draft.typ === 'gruppe' ? 'Position der neuen Gruppe auf der Karte antippen' : 'Position des neuen Objekts auf der Karte antippen') : `Neue Position für ${S.sel?.kennung} antippen`;
     if (mobile()) $('mapwrap').scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 }
@@ -465,21 +499,26 @@ async function posFromAddress() {
 }
 
 // ===== Neues Objekt =====
-function openNew() {
-  const Ty = TYPES[S.typ];
-  ['n_name', 'n_kunde', 'n_art', 'n_str', 'n_nr', 'n_plz', 'n_ort', 'n_h'].forEach(i => $(i).value = '');
+let neuTyp = 'baum';
+function openNew(typ = S.typ) {
+  neuTyp = typ; const Ty = TYPES[typ], isG = typ === 'gruppe';
+  ['n_name', 'n_kunde', 'n_art', 'n_gart', 'n_str', 'n_nr', 'n_plz', 'n_ort', 'n_h'].forEach(i => $(i).value = '');
   $('n_first').checked = true; document.querySelector('input[name=npos][value=adresse]').checked = true; $('nSave').textContent = 'Speichern';
-  $('dTitleNew').textContent = 'Neuer ' + Ty.label; $('n_artl').firstChild.textContent = Ty.artLabel; $('n_hw').hidden = S.typ !== 'baum';
+  $('dTitleNew').textContent = Ty.neu || 'Neuer ' + Ty.label; $('n_artl').firstChild.textContent = Ty.artLabel;
+  $('n_artl').hidden = isG; $('n_gartl').hidden = !isG; $('n_hw').hidden = typ !== 'baum'; $('n_firstl').hidden = isG;
+  $('n_name').placeholder = isG ? 'z. B. Stadtpark Nord' : 'z. B. Eiche an der Einfahrt';
+  $('n_hint').textContent = isG ? 'Leer lassen: Die Gruppe erhält automatisch eine ID (z. B. G-004) und wird so benannt.' : 'Leer lassen: Der Baum erhält automatisch eine ID (z. B. B-113) und wird so benannt.';
   $('dlg').showModal(); $('n_name').focus();
 }
 $('bAdd').onclick = () => openNew();
+$('bAddG').onclick = () => openNew('gruppe');
 $('dlg').addEventListener('change', e => { if (e.target.name === 'npos') $('nSave').textContent = e.target.value === 'karte' ? 'Weiter zur Karte' : 'Speichern'; });
 $('dlg').addEventListener('click', e => {
   const b = e.target.closest('[data-nstep]'); if (!b) return;
   const i = $('n_h'); i.value = Math.max(0, Math.round(((parseFloat(i.value) || 0) + parseFloat(b.dataset.nstep)) * 10) / 10).toFixed(1);
 });
 $('nCancel').onclick = () => $('dlg').close();
-const readDlg = () => { const v = i => $(i).value.trim() || null, h = parseFloat($('n_h').value); return { name: v('n_name'), kunde: v('n_kunde'), art: v('n_art'), strasse: v('n_str'), hausnummer: v('n_nr'), plz: v('n_plz'), stadt: v('n_ort'), hoehe: isNaN(h) ? null : h, first: $('n_first').checked }; };
+const readDlg = () => { const v = i => $(i).value.trim() || null, h = parseFloat($('n_h').value); return { typ: neuTyp, name: v('n_name'), kunde: v('n_kunde'), art: neuTyp === 'gruppe' ? v('n_gart') : v('n_art'), strasse: v('n_str'), hausnummer: v('n_nr'), plz: v('n_plz'), stadt: v('n_ort'), hoehe: isNaN(h) ? null : h, first: neuTyp !== 'gruppe' && $('n_first').checked }; };
 const posGps = () => new Promise((ok, no) => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p => ok([p.coords.latitude, p.coords.longitude]), no, { enableHighAccuracy: true, timeout: 15000 }) : no());
 $('nSave').onclick = async () => {
   const f = readDlg(), mode = document.querySelector('input[name=npos]:checked').value, btn = $('nSave');
@@ -497,14 +536,14 @@ $('nSave').onclick = async () => {
   } finally { btn.disabled = false; }
 };
 async function insertObject(f, ll, src) {
-  const Ty = TYPES[S.typ];
+  const typ = f.typ || S.typ, Ty = TYPES[typ];
   if (src !== 'adresse' && !f.strasse && !f.plz && !f.stadt) {       // Adresse zur Position ergänzen
     try {
       const a = (await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&accept-language=de&lat=${ll[0]}&lon=${ll[1]}`)).json()).address || {};
       f.strasse = a.road || null; f.hausnummer = a.house_number || null; f.plz = a.postcode || null; f.stadt = a.city || a.town || a.village || null;
     } catch (e) { /* Adresse bleibt leer */ }
   }
-  const { data, error } = await sb.from('objekte').insert({ typ: S.typ, name: f.name, kunde: f.kunde, art: f.art, strasse: f.strasse, hausnummer: f.hausnummer, plz: f.plz, stadt: f.stadt, lat: ll[0], lng: ll[1], pos_quelle: src }).select().single();
+  const { data, error } = await sb.from('objekte').insert({ typ, name: f.name, kunde: f.kunde, art: f.art, strasse: f.strasse, hausnummer: f.hausnummer, plz: f.plz, stadt: f.stadt, lat: ll[0], lng: ll[1], pos_quelle: src }).select().single();
   if (error) return toast('Anlegen fehlgeschlagen: ' + error.message, true);
   if (f.first) {
     const daten = { ...Ty.defaultDaten(), ...(f.hoehe != null ? { hoehe: f.hoehe } : {}) };
@@ -512,7 +551,7 @@ async function insertObject(f, ll, src) {
     if (e2) toast('Angelegt, aber erste Prüfung fehlgeschlagen: ' + e2.message, true);
   }
   const { data: fresh } = await sb.from('objekte').select('*').eq('id', data.id).single();
-  S.objs.push(fresh || data); S.objs.sort((a, b) => a.kennung.localeCompare(b.kennung, 'de', { numeric: true })); refreshKunden();
+  S.objs.push(fresh || data); S.objs.sort((a, b) => a.kennung.localeCompare(b.kennung, 'de', { numeric: true })); refreshKunden(); refreshGruppen();
   if ($('dlg').open) $('dlg').close();
   await select(data.id); toast(`${(fresh || data).kennung} angelegt`);
 }
@@ -520,9 +559,9 @@ async function insertObject(f, ll, src) {
 // ===== Menü: CSV (alle Objekte des Typs, auch entfernte) =====
 $('menu').addEventListener('click', e => { if (e.target.closest('button')) $('menu').open = false; });
 $('bCsv').onclick = () => {
-  const Ty = TYPES[S.typ], cols = ['kennung', 'name', 'kunde', 'art', 'strasse', 'hausnummer', 'plz', 'stadt', 'lat', 'lng', 'sicherheit', 'dringlichkeit', 'massnahme_faellig', 'erledigt_am', 'erledigt_von', 'massnahmen', 'anmerkungen', 'pruefer', 'letzte_pruefung', 'faellig_am', 'entfernt', 'entfernt_am'];
+  const Ty = TYPES[S.typ], cols = ['kennung', 'name', 'kunde', 'gruppe', 'art', 'strasse', 'hausnummer', 'plz', 'stadt', 'lat', 'lng', 'sicherheit', 'dringlichkeit', 'massnahme_faellig', 'erledigt_am', 'erledigt_von', 'massnahmen', 'anmerkungen', 'pruefer', 'letzte_pruefung', 'faellig_am', 'entfernt', 'entfernt_am'];
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const val = (o, c) => c === 'sicherheit' ? (o.letzte_pruefung ? sich(o.sicherheit).l : '') : c === 'dringlichkeit' ? (hatMass(o) ? dring(o.dringlichkeit).l : '') : c === 'massnahme_faellig' ? (massOffen(o) ? massBisTxt(o.letzte_pruefung, o.dringlichkeit) : '') : c === 'faellig_am' ? (status(o).due ? isoD(status(o).due) : '') : c === 'entfernt' ? (o.entfernt ? 'ja' : '') : o[c];
+  const val = (o, c) => c === 'gruppe' ? (gruppeVon(o) ? gLabel(gruppeVon(o)) : '') : c === 'sicherheit' ? (o.letzte_pruefung ? sich(o.sicherheit).l : '') : c === 'dringlichkeit' ? (hatMass(o) ? dring(o.dringlichkeit).l : '') : c === 'massnahme_faellig' ? (massOffen(o) ? massBisTxt(o.letzte_pruefung, o.dringlichkeit) : '') : c === 'faellig_am' ? (status(o).due ? isoD(status(o).due) : '') : c === 'entfernt' ? (o.entfernt ? 'ja' : '') : o[c];
   const list = sorted(S.objs.filter(o => o.typ === S.typ));
   const lines = [cols.concat(Ty.csv).join(';')].concat(list.map(o => cols.map(c => q(val(o, c))).concat(Ty.csv.map(c => q(o.aktuell?.[c]))).join(';')));
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));

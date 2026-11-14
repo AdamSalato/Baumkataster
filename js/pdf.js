@@ -69,7 +69,7 @@ function makePdf(o, ks, blank, suffix) {
   doc.text(blank ? 'Datum: ____________________' : `${addr(o) || 'ohne Adresse'}   |   erstellt am ${new Date().toLocaleDateString('de-DE')}`, X, y + 2); doc.setTextColor(0); y += 8;
 
   H('Stammdaten');
-  P.row('ID:', blank ? '' : o.kennung); P.row('Name / Bezeichnung:', blank ? '' : o.name); P.row('Kunde:', blank ? '' : o.kunde); P.row(Ty.artLabel + ':', blank ? '' : o.art);
+  P.row('ID:', blank ? '' : o.kennung); P.row('Name / Bezeichnung:', blank ? '' : o.name); P.row('Kunde:', blank ? '' : o.kunde); if (!blank && gruppeVon(o)) P.row('Gruppe:', gLabel(gruppeVon(o))); P.row(Ty.artLabel + ':', blank ? '' : o.art);
   P.row('Straße / Nr.:', blank ? '' : [o.strasse, o.hausnummer].filter(Boolean).join(' ')); P.row('PLZ / Stadt:', blank ? '' : [o.plz, o.stadt].filter(Boolean).join(' '));
   P.row('Position (Lat, Lng):', blank ? '' : `${o.lat.toFixed(6)}, ${o.lng.toFixed(6)}${o.pos_quelle === 'adresse' ? ' (ungefähr)' : ''}`);
   Ty.pdf.stamm(o, P);
@@ -101,6 +101,7 @@ function listColumns(Ty) {
   return [
     ['name', 'Name', 2.2, o => o.name !== o.kennung ? o.name : '', true],
     ['kunde', 'Kunde', 2, o => o.kunde || '', true],
+    ['gruppe', 'Gruppe', 1.8, o => istGruppe(o) ? nBaeume(mitglieder(o).filter(x => !x.entfernt).length) : gruppeVon(o) ? gLabel(gruppeVon(o)) : '', false],
     ['art', Ty.artLabel, 2.4, o => o.art || '', true],
     ['adresse', 'Adresse', 2.8, o => addr(o), true],
     ['letzte', 'Letzte Prüfung', 1.4, o => fmtD(o.letzte_pruefung), true, o => status(o).k === 'red' ? '--red' : null],
@@ -116,7 +117,7 @@ function listColumns(Ty) {
     ['status', 'Status', 1.4, o => o.entfernt ? status(o).label : 'Aktiv', false]
   ];
 }
-function listPdf(list, cols, info) {
+function listPdf(list, cols, info, titel) {
   const Ty = TYPES[S.typ], doc = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
   const X = 12, W = 273, BOT = 196, BR = rgb('--brand'), BI = rgb('--brand-ink'), PADX = 1.6;
   const all = [['id', 'ID', 0, o => o.kennung], ...cols];
@@ -144,9 +145,9 @@ function listPdf(list, cols, info) {
   };
   // Titel
   pdfKopf(doc, X + W, 8);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(0); doc.text(Ty.listTitle, X, y + 4.5); y += 9;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(0); doc.text(titel || Ty.listTitle, X, y + 4.5); y += 9;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90);
-  const sub = doc.splitTextToSize(`${info}   |   ${list.length} ${list.length === 1 ? Ty.label : Ty.plural}   |   Stand ${new Date().toLocaleDateString('de-DE')}`, W);
+  const sub = doc.splitTextToSize(`${info}   |   ${anzahlText(list)}   |   Stand ${new Date().toLocaleDateString('de-DE')}`, W);
   doc.text(sub, X, y + 1.5); doc.setTextColor(0); y += sub.length * 4 + 3;
   head();
   list.forEach((o, r) => {
@@ -166,26 +167,36 @@ function listPdf(list, cols, info) {
   if (!list.length) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90); doc.text('Keine Einträge in dieser Auswahl.', X, y + 6); }
   const n = doc.getNumberOfPages();
   for (let p = 1; p <= n; p++) { doc.setPage(p); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110); doc.text(`${CONFIG.FIRMA ? CONFIG.FIRMA + '  |  ' : ''}${Ty.listTitle}  |  Seite ${p}/${n}`, X, 203); doc.setTextColor(0); }
-  doc.save(`${Ty.listTitle}_${isoD(today())}`.replace(/[^\wäöüÄÖÜß-]+/g, '_') + '.pdf');
+  doc.save(`${titel || Ty.listTitle}_${isoD(today())}`.replace(/[^\wäöüÄÖÜß-]+/g, '_') + '.pdf');
 }
 
 // ----- Dialog: Spalten wählen -----
 const LIST_KEY = 'bk_listcols';
-function openList() {
-  const Ty = TYPES[S.typ], cols = listColumns(Ty), list = currentList();
+// Anzahl als Text: „12 Bäume“ bzw. „12 Bäume, 2 Gruppen“
+function anzahlText(list) {
+  const Ty = TYPES[S.typ], g = list.filter(istGruppe).length, n = list.length - g, p = [];
+  if (n || !g) p.push(`${n} ${n === 1 ? Ty.label : Ty.plural}`);
+  if (g) p.push(`${g} ${g === 1 ? 'Gruppe' : 'Gruppen'}`);
+  return p.join(', ');
+}
+// Ohne Angaben: die Liste aus dem Dashboard. Mit Angaben: eine eigene Liste, z. B. die Bäume einer Gruppe.
+let listJob = null;
+function openList(list, info, titel) {
+  const Ty = TYPES[S.typ], cols = listColumns(Ty);
+  listJob = Array.isArray(list) ? { list, info, titel: titel || Ty.listTitle } : { list: currentList(), info: filterText(), titel: null };
   let saved = null; try { saved = JSON.parse(store.get(LIST_KEY + '_' + S.typ)); } catch (e) { }
   const on = c => Array.isArray(saved) ? saved.includes(c[0]) : c[4];
-  $('lInfo').innerHTML = `<b>${list.length} ${list.length === 1 ? Ty.label : Ty.plural}</b> <span class="mute">· ${esc(filterText())}</span>`;
+  $('lInfo').innerHTML = `<b>${anzahlText(listJob.list)}</b> <span class="mute">· ${esc(listJob.info)}</span>`;
   $('lCols').innerHTML = cols.map(c => `<label class="ck"><input type="checkbox" value="${c[0]}" ${on(c) ? 'checked' : ''}>${esc(c[1])}</label>`).join('');
   $('dlgL').showModal();
 }
-$('bList').onclick = openList;
+$('bList').onclick = () => openList();
 $('lCancel').onclick = () => $('dlgL').close();
 const lSet = f => { const cols = listColumns(TYPES[S.typ]); $('lCols').querySelectorAll('input').forEach(i => { i.checked = f(cols.find(c => c[0] === i.value)); }); };
 $('lAll').onclick = () => lSet(() => true); $('lNone').onclick = () => lSet(() => false); $('lStd').onclick = () => lSet(c => c[4]);
 $('lSave').onclick = () => {
   const keys = [...$('lCols').querySelectorAll('input:checked')].map(i => i.value);
   store.set(LIST_KEY + '_' + S.typ, JSON.stringify(keys));
-  listPdf(currentList(), listColumns(TYPES[S.typ]).filter(c => keys.includes(c[0])), filterText());
+  listPdf(listJob.list, listColumns(TYPES[S.typ]).filter(c => keys.includes(c[0])), listJob.info, listJob.titel);
   $('dlgL').close();
 };
