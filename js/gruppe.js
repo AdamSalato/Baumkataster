@@ -17,6 +17,13 @@ const gruppeVon = t => istGruppe(t) ? null : objById(t.gruppe_id);
 const mitglieder = g => S.objs.filter(o => o.gruppe_id === g.id && !istGruppe(o));
 const gruppen = () => S.objs.filter(o => istGruppe(o) && !o.entfernt);
 const gLabel = g => g.name && g.name !== g.kennung ? `${g.kennung} · ${g.name}` : g.kennung;
+// Kreis um alle (nicht entfernten) Bäume einer Gruppe: Mittelpunkt und Radius in Metern. Ohne Bäume gibt es keinen Kreis.
+function gruppenKreis(g) {
+  const m = mitglieder(g).filter(o => !o.entfernt && typeof o.lat === 'number' && typeof o.lng === 'number'); if (!m.length) return null;
+  const lat = m.map(o => o.lat), lng = m.map(o => o.lng), mitte = [(Math.min(...lat) + Math.max(...lat)) / 2, (Math.min(...lng) + Math.max(...lng)) / 2];
+  const rad = x => x * Math.PI / 180, dist = o => { const dy = rad(o.lat - mitte[0]) * 6371000, dx = rad(o.lng - mitte[1]) * 6371000 * Math.cos(rad(mitte[0])); return Math.hypot(dx, dy); };
+  return { mitte, radius: Math.max(...m.map(dist)) * 1.15 + 12, n: m.length };            // etwas Rand, damit die Punkte im Kreis liegen
+}
 const nBaeume = n => `${n} ${n === 1 ? 'Baum' : 'Bäume'}`;
 const artSelect = (v, attr) => `<select ${attr}><option value="">– bitte wählen –</option>${[...new Set(GRUPPEN_ARTEN.concat(v ? [v] : []))].map(a => `<option ${a === v ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>`;
 $('n_gart').innerHTML = artSelect('', '').replace(/^<select >|<\/select>$/g, '');
@@ -48,12 +55,10 @@ function renderGruppe() {
   <div id="facts"></div>
   <section class="card"><h3 id="gCount"></h3><div id="gList"></div></section>
   <section class="card"><h3>Angaben zur Gruppe</h3><div id="gForm"></div>
-    <p style="margin:8px 0 0"><small id="posInfo"></small></p>
-    <div class="foot"><button class="btn sec" id="bMove">Position auf Karte neu setzen</button><button class="btn sec" id="bGeoAddr">Position aus Adresse ermitteln</button>
-      <button class="btn sec" id="bEnt">${g.entfernt ? 'Wieder als aktiv führen' : 'Als entfernt markieren'}</button><button class="btn dan" id="bDel">Gruppe löschen</button></div>
-    <span class="hint">Beim Löschen der Gruppe bleiben die Bäume erhalten, sie gehören dann nur zu keiner Gruppe mehr.</span>
+    <div class="foot"><button class="btn sec" id="bEnt">${g.entfernt ? 'Wieder als aktiv führen' : 'Als entfernt markieren'}</button><button class="btn dan" id="bDel">Gruppe löschen</button></div>
+    <span class="hint">Auf der Karte erscheint die Gruppe als Kreis um ihre Bäume. Beim Löschen der Gruppe bleiben die Bäume erhalten, sie gehören dann nur zu keiner Gruppe mehr.</span>
   </section>`;
-  renderHead(); renderGFacts(); renderGList(); renderGForm(); renderPos();
+  renderHead(); renderGFacts(); renderGList(); renderGForm();
 }
 function renderGFacts() {
   const g = S.sel, m = mitglieder(g).filter(o => !o.entfernt), offen = massOffen(g), fl = [];
@@ -85,12 +90,12 @@ function renderGForm() {
   $('gForm').innerHTML = `<div class="g2">
       <label>ID<input type="text" value="${esc(g.kennung)}" readonly></label>${field('Name / Bezeichnung', 't', 'name', g.name)}
       <label>Art${artSelect(g.art, A('t', 'art'))}</label>${field('Kunde', 't', 'kunde', g.kunde, 'text', 'list="kunden" autocomplete="off" placeholder="Tippen oder auswählen"')}
+      ${field('Prüfer', 't', 'pruefer', g.pruefer)}
     </div>
     <h4>Verkehrssicherheit</h4>${segC('t', 'sicherheit', g.sicherheit, Object.entries(SICH).map(([v, d]) => [v, d.l, d.c]))}
     ${massForm(g, 't')}
     ${area('Maßnahmen Beschreibung', 't', 'massnahmen', g.massnahmen)}
-    ${area('Anmerkungen', 't', 'anmerkungen', g.anmerkungen)}
-    <h4>Lage</h4><div class="g2">${field('Straße', 't', 'strasse', g.strasse)}${field('Hausnr.', 't', 'hausnummer', g.hausnummer)}${field('PLZ', 't', 'plz', g.plz)}${field('Stadt', 't', 'stadt', g.stadt)}</div>`;
+    ${area('Anmerkungen', 't', 'anmerkungen', g.anmerkungen)}`;
 }
 
 // ----- Dialog: mehrere Bäume auf einmal hinzufügen -----
@@ -119,4 +124,5 @@ $('gaSave').onclick = async () => {
   if (error) { toast('Hinzufügen fehlgeschlagen: ' + error.message, true); gaRender(); return; }
   S.objs.forEach(o => { if (GA.sel.has(o.id)) o.gruppe_id = g.id; });
   $('dlgG').close(); renderGFacts(); renderGList(); renderMarkers(); toast(`${nBaeume(ids.length)} hinzugefügt`);
+  const m = mitglieder(g); if (!noMap() && m.length) map.fitBounds(m.map(o => [o.lat, o.lng]), { maxZoom: 18, padding: [60, 60] });
 };

@@ -104,8 +104,9 @@ th button:hover{color:var(--ink)}
 td{padding:8px 10px;border-bottom:1px solid #eef1ee;vertical-align:middle}
 tr.r{cursor:pointer}
 tr.r:hover td{background:#f4f8f5}
-tr.r.grp td{background:color-mix(in srgb,var(--blu-bg) 45%,var(--card))}
-tr.r.grp:hover td{background:color-mix(in srgb,var(--blu-bg) 75%,var(--card))}
+tr.r.grp td{background:var(--blu-bg)}
+tr.r.grp:hover td{background:color-mix(in srgb,var(--blu-bg) 86%,var(--blu))}
+tr.r.grp .badge.blu{background:var(--blu);color:#fff}
 tr.r.off td{background:var(--off-bg);color:var(--mute)}
 tr.r.off:hover td{background:#dfe4e0}
 td small{display:block;line-height:1.25}

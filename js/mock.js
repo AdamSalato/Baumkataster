@@ -2,7 +2,7 @@
 // Bildet die Datenbank-Automatik aus setup.sql nach: ID-Vergabe, Übernahme der neuesten Prüfung, 12-Stunden-Sperre, Admin-Recht.
 // Anmeldung: admin / admin (Admin) oder pruefer / pruefer (normaler Benutzer).
 function createMock() {
-  const KEY = 'bk_test_db_v6', SESS = 'bk_test_user', listeners = [];
+  const KEY = 'bk_test_db_v7', SESS = 'bk_test_user', listeners = [];
   const USERS = { admin: { pw: 'admin', name: 'Admin', role: 'admin' }, pruefer: { pw: 'pruefer', name: 'P. Prüfer', role: null } };
   const me = () => USERS[localStorage.getItem(SESS)] || null, isAdmin = () => !!me() && me().role === 'admin';
   const gesperrt = k => !isAdmin() && Date.now() - new Date(k.created_at).getTime() > 12 * 36e5;
@@ -77,7 +77,7 @@ function createMock() {
       sync(t.id);
     });
     // Beispiel-Gruppen: Bäume „Am Park“ und die Allee in der Hauptstraße
-    const grp = (name, art, str, kunde, extra) => { const m = d.objekte.filter(o => o.strasse === str), g = objDef({ typ: 'gruppe', name, art, kunde, strasse: str, plz: '58332', stadt: 'Schwelm', lat: m.reduce((a, o) => a + o.lat, 0) / m.length + 0.00012, lng: m.reduce((a, o) => a + o.lng, 0) / m.length, pos_quelle: 'karte', ...extra }); kennung(g); d.objekte.push(g); m.forEach(o => { o.gruppe_id = g.id; }); };
+    const grp = (name, art, str, kunde, extra) => { const m = d.objekte.filter(o => o.strasse === str), g = objDef({ typ: 'gruppe', name, art, kunde, lat: m.reduce((a, o) => a + o.lat, 0) / m.length + 0.00012, lng: m.reduce((a, o) => a + o.lng, 0) / m.length, pos_quelle: 'karte', pruefer: P[0], ...extra }); kennung(g); d.objekte.push(g); m.forEach(o => { o.gruppe_id = g.id; }); };
     grp('Parkanlage Am Park', 'Park', 'Am Park', KD[1], { sicherheit: 'nach_massnahme', dringlichkeit: 'hoch', massnahmen: 'Wege freischneiden, Totholz im Bestand entfernen', anmerkungen: 'Zugang über das Tor an der Nordseite' });
     grp('Allee Hauptstraße', 'Allee', 'Hauptstraße', KD[1], {});
     seeding = false;
@@ -161,4 +161,4 @@ function createMock() {
     }
   };
 }
-if ($('bReset')) $('bReset').onclick = () => { if (confirm('Alle Testdaten verwerfen und die Beispieldaten neu laden?')) { localStorage.removeItem('bk_test_db_v6'); location.reload(); } };
+if ($('bReset')) $('bReset').onclick = () => { if (confirm('Alle Testdaten verwerfen und die Beispieldaten neu laden?')) { localStorage.removeItem('bk_test_db_v7'); location.reload(); } };

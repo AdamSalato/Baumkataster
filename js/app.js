@@ -129,7 +129,7 @@ async function homePos() {
 }
 async function goHome() { map.setView(await homePos(), 17); }
 $('bHome').onclick = goHome;
-$('bAll').onclick = () => { const v = S.objs.filter(visible); if (v.length) map.fitBounds(v.map(t => [t.lat, t.lng]), { maxZoom: 18, padding: [40, 40] }); else toast('Keine Objekte vorhanden'); };
+$('bAll').onclick = () => { const v = S.objs.filter(t => visible(t) && !istGruppe(t)); if (v.length) map.fitBounds(v.map(t => [t.lat, t.lng]), { maxZoom: 18, padding: [40, 40] }); else toast('Keine Objekte vorhanden'); };
 $('geoForm').onsubmit = async e => {
   e.preventDefault(); const q = $('geoQ').value.trim(); if (!q) return;
   const g = await geocode(q); if (!g) return toast('Adresse nicht gefunden', true);
@@ -140,20 +140,28 @@ function setMode(m) { S.mode = m; $('mP').classList.toggle('on', m === 'pruef');
 $('mP').onclick = () => setMode('pruef'); $('mR').onclick = () => setMode('risk');
 function renderLegend() {
   const it = S.mode === 'risk' ? Object.values(SICH).map(x => [x.c, x.k]) : [['grn', 'Prüfung ok'], ['yel', '≤ 3 Monate'], ['org', '≤ 1 Monat'], ['red', 'überfällig']];
-  $('legend').innerHTML = it.map(([c, t]) => `<span><i style="background:${mcol(c)}"></i>${t}</span>`).join('') + (S.gruppen && S.objs.some(istGruppe) ? `<span><i style="background:${cssVar('--blu')};border-radius:3px"></i>Gruppe</span>` : '');
+  $('legend').innerHTML = it.map(([c, t]) => `<span><i style="background:${mcol(c)}"></i>${t}</span>`).join('') + (S.gruppen && S.objs.some(istGruppe) ? `<span><i style="background:color-mix(in srgb,${cssVar('--blu')} 18%,transparent);border:2px dashed ${cssVar('--blu')};box-sizing:border-box"></i>Gruppe</span>` : '');
 }
 function mStyle(t) {
-  if (istGruppe(t)) { const on = S.sel && S.sel.id === t.id; return { radius: on ? 15 : 12, color: on ? '#111' : '#fff', weight: on ? 4 : 3, fillColor: t.entfernt ? mcol('neu') : cssVar('--blu'), fillOpacity: 1 }; }
   const on = S.sel && S.sel.id === t.id, col = mcol(t.entfernt ? 'neu' : S.mode === 'risk' ? (t.letzte_pruefung ? sich(t.sicherheit).c : 'neu') : status(t).k);
   return { radius: on ? 13 : 10, color: on ? '#111' : '#fff', weight: on ? 4 : 2, fillColor: col, fillOpacity: 1 };
 }
 function renderMarkers() {
   if (!layer) return; layer.clearLayers(); markers.clear();
-  S.objs.filter(visible).forEach(t => {
-    const m = L.circleMarker([t.lat, t.lng], mStyle(t)).bindTooltip(`${istGruppe(t) ? 'Gruppe ' : ''}${esc(t.kennung)}${t.name !== t.kennung ? ' · ' + esc(t.name) : ''}${t.kunde ? ' · ' + esc(t.kunde) : ''}${t.entfernt ? ' (entfernt)' : ''}`).on('click', ev => { L.DomEvent.stopPropagation(ev); if (S.tool) return mapClick(ev.latlng); select(t.id); });
+  const vis = S.objs.filter(visible), klick = t => ev => { L.DomEvent.stopPropagation(ev); if (S.tool) return mapClick(ev.latlng); select(t.id); };
+  // Gruppen zuerst (liegen unter den Bäumen): Kreis um alle Bäume der Gruppe, passt sich automatisch an
+  vis.filter(istGruppe).forEach(g => {
+    const k = gruppenKreis(g); if (!k) return;
+    const on = S.sel && S.sel.id === g.id, col = g.entfernt ? mcol('neu') : cssVar('--blu');
+    const c = L.circle(k.mitte, { radius: k.radius, color: col, weight: on ? 4 : 2, dashArray: on ? null : '6 6', fillColor: col, fillOpacity: on ? .18 : .1 })
+      .bindTooltip(`Gruppe ${esc(gLabel(g))} · ${nBaeume(k.n)}${g.kunde ? ' · ' + esc(g.kunde) : ''}`, { sticky: true }).on('click', klick(g));
+    c.addTo(layer); markers.set(g.id, c);
+  });
+  vis.filter(t => !istGruppe(t)).forEach(t => {
+    const m = L.circleMarker([t.lat, t.lng], mStyle(t)).bindTooltip(`${esc(t.kennung)}${t.name !== t.kennung ? ' · ' + esc(t.name) : ''}${t.kunde ? ' · ' + esc(t.kunde) : ''}${t.entfernt ? ' (entfernt)' : ''}`).on('click', klick(t));
     m.addTo(layer); markers.set(t.id, m);
   });
-  if (S.sel) markers.get(S.sel.id)?.bringToFront();
+  if (S.sel && !istGruppe(S.sel)) markers.get(S.sel.id)?.bringToFront();
 }
 
 // ===== Kunden =====
@@ -221,10 +229,10 @@ function renderDash() {
     const badges = (isG ? `<span class="badge blu">Gruppe · ${nBaeume(mitglieder(t).filter(o => !o.entfernt).length)}</span>` : '') + (t.entfernt ? '<span class="badge off">Entfernt</span>' : T(t).badges(t) + (massOffen(t) ? `<span class="badge ${dring(t.dringlichkeit).c}">Maßnahme: ${dring(t.dringlichkeit).k}</span>` : ''));
     const massZeile = massOffen(t) && !t.entfernt && S.filter === 'mass' ? `<br><b>${isG ? dring(t.dringlichkeit).l : 'Maßnahme ' + massFrist(t.letzte_pruefung, t.dringlichkeit)}</b>${t.massnahmen ? ': ' + esc(t.massnahmen) : ''}` : '';
     return `<tr class="r${isG ? ' grp' : ''}${t.entfernt ? ' off' : ''}" data-id="${t.id}" tabindex="0"><td class="idc">${esc(t.kennung)}</td>
-    <td><b>${nm}</b>${badges}<small>${esc([t.art, addr(t), g && 'Gruppe ' + gLabel(g)].filter(Boolean).join(' · '))}${massZeile}</small></td>
+    <td><b>${nm}</b>${badges}<small>${esc([t.art, !isG && addr(t), g && 'Gruppe ' + gLabel(g)].filter(Boolean).join(' · '))}${massZeile}</small></td>
     <td class="hide-xs">${t.kunde ? esc(t.kunde) : dash}</td>
     <td>${isG ? dash : `<span class="chip ${st.k}">${fmtD(t.letzte_pruefung)}</span><small>${st.label}</small>`}</td>
-    <td class="hide-s nw">${isG ? dash : esc(t.pruefer || '–')}</td>
+    <td class="hide-s nw">${esc(t.pruefer || '–')}</td>
     <td>${bewertet(t) ? `<span class="chip ${t.entfernt ? 'neu' : sich(t.sicherheit).c}">${sich(t.sicherheit).k}</span>` : dash}</td>
     <td class="hide-s nw">${isG ? dash : T(t).keyFmt(T(t).keyValue(t))}</td></tr>`;
   }).join('');
@@ -267,8 +275,8 @@ async function select(id) {
   rerender(); renderMarkers();
   if (!noMap()) {
     const m = isG ? mitglieder(t) : [];
-    if (m.length) map.fitBounds(m.concat(t).map(o => [o.lat, o.lng]), { maxZoom: 18, padding: [50, 50] });      // Gruppe: alle ihre Bäume zeigen
-    else map.setView([t.lat, t.lng], Math.max(map.getZoom(), 18));
+    if (m.length) map.fitBounds(m.map(o => [o.lat, o.lng]), { maxZoom: 18, padding: [60, 60] });      // Gruppe: alle ihre Bäume zeigen
+    else if (!isG) map.setView([t.lat, t.lng], Math.max(map.getZoom(), 18));
   }
   $('panel').scrollTop = 0;
   if (mobile()) $('detail').scrollIntoView({ block: 'start' });
@@ -283,7 +291,7 @@ async function syncSel() {
 function renderHead() {
   const t = S.sel;
   $('dTitle').textContent = t.name;
-  $('dAddr').innerHTML = `<span class="idchip">${esc(t.kennung)}</span>${esc([t.art, addr(t)].filter(Boolean).join(' · '))}`;
+  $('dAddr').innerHTML = `<span class="idchip">${esc(t.kennung)}</span>${esc((istGruppe(t) ? [t.art, t.kunde] : [t.art, addr(t)]).filter(Boolean).join(' · '))}`;
 }
 function renderDetail() {
   const t = S.sel, Ty = T(t), darfLoeschen = S.admin || !S.kons.some(abgelaufen);
@@ -506,6 +514,7 @@ function openNew(typ = S.typ) {
   $('n_first').checked = true; document.querySelector('input[name=npos][value=adresse]').checked = true; $('nSave').textContent = 'Speichern';
   $('dTitleNew').textContent = Ty.neu || 'Neuer ' + Ty.label; $('n_artl').firstChild.textContent = Ty.artLabel;
   $('n_artl').hidden = isG; $('n_gartl').hidden = !isG; $('n_hw').hidden = typ !== 'baum'; $('n_firstl').hidden = isG;
+  $('n_posw').hidden = isG; $('n_ghint').hidden = !isG;            // Gruppen haben keine eigene Adresse/Position
   $('n_name').placeholder = isG ? 'z. B. Stadtpark Nord' : 'z. B. Eiche an der Einfahrt';
   $('n_hint').textContent = isG ? 'Leer lassen: Die Gruppe erhält automatisch eine ID (z. B. G-004) und wird so benannt.' : 'Leer lassen: Der Baum erhält automatisch eine ID (z. B. B-113) und wird so benannt.';
   $('dlg').showModal(); $('n_name').focus();
@@ -522,6 +531,7 @@ const readDlg = () => { const v = i => $(i).value.trim() || null, h = parseFloat
 const posGps = () => new Promise((ok, no) => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p => ok([p.coords.latitude, p.coords.longitude]), no, { enableHighAccuracy: true, timeout: 15000 }) : no());
 $('nSave').onclick = async () => {
   const f = readDlg(), mode = document.querySelector('input[name=npos]:checked').value, btn = $('nSave');
+  if (f.typ === 'gruppe') { btn.disabled = true; try { await insertObject(f, await homePos(), 'karte'); } finally { btn.disabled = false; } return; }      // Position der Gruppe ergibt sich aus ihren Bäumen
   if (mode === 'karte') { S.draft = f; $('dlg').close(); setTool('add'); return; }
   btn.disabled = true;
   try {
@@ -537,13 +547,13 @@ $('nSave').onclick = async () => {
 };
 async function insertObject(f, ll, src) {
   const typ = f.typ || S.typ, Ty = TYPES[typ];
-  if (src !== 'adresse' && !f.strasse && !f.plz && !f.stadt) {       // Adresse zur Position ergänzen
+  if (typ !== 'gruppe' && src !== 'adresse' && !f.strasse && !f.plz && !f.stadt) {       // Adresse zur Position ergänzen
     try {
       const a = (await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&accept-language=de&lat=${ll[0]}&lon=${ll[1]}`)).json()).address || {};
       f.strasse = a.road || null; f.hausnummer = a.house_number || null; f.plz = a.postcode || null; f.stadt = a.city || a.town || a.village || null;
     } catch (e) { /* Adresse bleibt leer */ }
   }
-  const { data, error } = await sb.from('objekte').insert({ typ, name: f.name, kunde: f.kunde, art: f.art, strasse: f.strasse, hausnummer: f.hausnummer, plz: f.plz, stadt: f.stadt, lat: ll[0], lng: ll[1], pos_quelle: src }).select().single();
+  const { data, error } = await sb.from('objekte').insert({ typ, name: f.name, kunde: f.kunde, pruefer: typ === 'gruppe' ? meName() : undefined, art: f.art, strasse: f.strasse, hausnummer: f.hausnummer, plz: f.plz, stadt: f.stadt, lat: ll[0], lng: ll[1], pos_quelle: src }).select().single();
   if (error) return toast('Anlegen fehlgeschlagen: ' + error.message, true);
   if (f.first) {
     const daten = { ...Ty.defaultDaten(), ...(f.hoehe != null ? { hoehe: f.hoehe } : {}) };

@@ -8,8 +8,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <!-- Nach jeder Änderung an CSS- oder JS-Dateien die Versionsangabe ?v=… in dieser Datei überall hochzählen,
      damit alle Geräte die neuen Dateien laden (sonst mischt der Browser alte und neue Dateien). -->
-<link rel="stylesheet" href="css/theme.css?v=2026-11-14f">
-<link rel="stylesheet" href="css/app.css?v=2026-11-14f">
+<link rel="stylesheet" href="css/theme.css?v=2026-11-14g">
+<link rel="stylesheet" href="css/app.css?v=2026-11-14g">
 </head>
 <body>
 
@@ -73,7 +73,9 @@
     <label id="n_hw">Baumhöhe (m)
       <div class="num"><input id="n_h" type="number" step="0.1" min="0" inputmode="decimal"><span class="ar"><button type="button" data-nstep="0.1" aria-label="10 cm höher">▲</button><button type="button" data-nstep="-0.1" aria-label="10 cm niedriger">▼</button></span></div>
     </label>
-    <span></span>
+  </div>
+  <div id="n_posw">
+  <div class="g2">
     <label>Straße<input id="n_str" type="text"></label>
     <label>Hausnr.<input id="n_nr" type="text"></label>
     <label>PLZ<input id="n_plz" type="text"></label>
@@ -86,6 +88,8 @@
     <label><input type="radio" name="npos" value="gps"><span>Mein Standort</span></label>
   </div>
   <span class="hint">Die genaue Position lässt sich später jederzeit auf der Karte neu setzen.</span>
+  </div>
+  <span class="hint" id="n_ghint" hidden>Die Gruppe braucht keine eigene Adresse: Auf der Karte erscheint sie als Kreis um ihre Bäume. Nach dem Speichern kannst du die Bäume hinzufügen.</span>
   <label class="ck" style="margin-top:6px" id="n_firstl"><input id="n_first" type="checkbox" checked>Erste Prüfung gleich anlegen</label>
   <div class="acts" style="margin-bottom:0"><button class="btn pri" id="nSave">Weiter</button><button class="btn sec" id="nCancel">Abbrechen</button></div>
 </dialog>
@@ -119,11 +123,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="config.js?v=2026-11-14f"></script>
-<script src="js/basis.js?v=2026-11-14f"></script>
-<script src="js/baum.js?v=2026-11-14f"></script>
-<script src="js/gruppe.js?v=2026-11-14f"></script>
-<script src="js/pdf.js?v=2026-11-14f"></script>
-<script src="js/app.js?v=2026-11-14f"></script>
+<script src="config.js?v=2026-11-14g"></script>
+<script src="js/basis.js?v=2026-11-14g"></script>
+<script src="js/baum.js?v=2026-11-14g"></script>
+<script src="js/gruppe.js?v=2026-11-14g"></script>
+<script src="js/pdf.js?v=2026-11-14g"></script>
+<script src="js/app.js?v=2026-11-14g"></script>
 </body>
 </html>
