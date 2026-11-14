@@ -166,7 +166,7 @@ function listPdf(list, cols, info) {
   if (!list.length) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90); doc.text('Keine Einträge in dieser Auswahl.', X, y + 6); }
   const n = doc.getNumberOfPages();
   for (let p = 1; p <= n; p++) { doc.setPage(p); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110); doc.text(`${CONFIG.FIRMA ? CONFIG.FIRMA + '  |  ' : ''}${Ty.listTitle}  |  Seite ${p}/${n}`, X, 203); doc.setTextColor(0); }
-  doc.save(`${Ty.listTitle}${S.kunde ? '_' + S.kunde : ''}_${isoD(today())}`.replace(/[^\wäöüÄÖÜß-]+/g, '_') + '.pdf');
+  doc.save(`${Ty.listTitle}_${isoD(today())}`.replace(/[^\wäöüÄÖÜß-]+/g, '_') + '.pdf');
 }
 
 // ----- Dialog: Spalten wählen -----

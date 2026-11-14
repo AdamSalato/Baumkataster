@@ -92,9 +92,10 @@ TYPES.baum = {
       <h4>Zustand <span class="unit">(Vitalitätsstufe)</span></h4>${segC('d', 'zustand', zNorm(D.zustand), VITAL)}
       <h4>Verkehrssicherheit</h4>${segC('k', 'sicherheit', SICH[k.sicherheit] ? k.sicherheit : 'sicher', Object.entries(SICH).map(([v, x]) => [v, x.l, x.c]))}
       ${massForm(k)}
-      ${cb('d', 'abstimmung_fachabt', D.abstimmung_fachabt, 'Abstimmung mit Fachabteilung')}${cb('d', 'eingehende_untersuchung', D.eingehende_untersuchung, 'Eingehende Untersuchung erforderlich')}
       ${area('Maßnahmen Beschreibung', 'k', 'massnahmen', k.massnahmen)}
       ${cb('d', 'faellung', D.faellung, 'Fällung erforderlich', 'warn')}
+      ${cb('d', 'abstimmung_fachabt', D.abstimmung_fachabt, 'Abstimmung mit Fachabteilung')}
+      ${cb('d', 'eingehende_untersuchung', D.eingehende_untersuchung, 'Eingehende Untersuchung erforderlich')}
       ${area('Anmerkungen', 'k', 'anmerkungen', k.anmerkungen)}
       <hr><h3>Regelkontrolle <small>nur verdächtige Umstände ankreuzen</small></h3>${groups}
       <div style="margin-top:10px">${area('Sonstiges, Anmerkungen zu verdächtigen Umständen', 'd', 'sonstiges', D.sonstiges)}</div>`;
@@ -108,8 +109,8 @@ TYPES.baum = {
         P.row('Baumhöhe:', P.m(D.hoehe, 1, 'm')); P.row('Kronenbreite:', P.m(D.breite, 1, 'm')); P.row('Stammumfang:', P.m(D.umfang, 0, 'cm'));
         P.row('Entwicklungsphase:', P.opts(PHASE, D.phase)); P.row('Vitalitätsstufe:', P.optsL(VITAL, zNorm(D.zustand)));
         P.pruefStd(k);
-        P.row('Abstimmung Fachabteilung:', P.yn(D.abstimmung_fachabt)); P.row('Eingehende Untersuchung:', P.yn(D.eingehende_untersuchung));
         P.row('Fällung erforderlich:', { o: [['ja', !P.blank && !!D.faellung]] });
+        P.row('Abstimmung Fachabteilung:', P.yn(D.abstimmung_fachabt)); P.row('Eingehende Untersuchung:', P.yn(D.eingehende_untersuchung));
         P.row('Anmerkungen:', k.anmerkungen); P.row('Weitere Kontrollstellen:', D.weitere_stellen);
         P.gap(3); P.H('Regelkontrolle: nur verdächtige Umstände ankreuzen'); P.checklist(CHK, D.befunde || []);
         P.row('Sonstiges, Anmerkungen:', D.sonstiges); P.sign();

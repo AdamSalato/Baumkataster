@@ -6,8 +6,10 @@
 <title>Baumkataster</title>
 <link rel="icon" href="img/logo.svg">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="css/theme.css">
-<link rel="stylesheet" href="css/app.css">
+<!-- Nach jeder Änderung an CSS- oder JS-Dateien die Versionsangabe ?v=… in dieser Datei überall hochzählen,
+     damit alle Geräte die neuen Dateien laden (sonst mischt der Browser alte und neue Dateien). -->
+<link rel="stylesheet" href="css/theme.css?v=2026-11-14e">
+<link rel="stylesheet" href="css/app.css?v=2026-11-14e">
 </head>
 <body>
 
@@ -93,7 +95,7 @@
   <h4 style="margin-top:8px">Spalten der Tabelle</h4>
   <div class="linkrow"><button type="button" id="lAll">Alle</button><button type="button" id="lStd">Standard</button><button type="button" id="lNone">Keine</button></div>
   <div class="cols" id="lCols"></div>
-  <span class="hint">Die ID steht immer in der ersten Spalte. Die Liste enthält genau die Einträge, die gerade im Dashboard zu sehen sind (Kachel, Kunde, Suche, Sortierung).</span>
+  <span class="hint">Die ID steht immer in der ersten Spalte. Die Liste enthält genau die Einträge, die gerade im Dashboard zu sehen sind (Kachel, Suche, Sortierung).</span>
   <div class="acts" style="margin-bottom:0"><button class="btn pri" id="lSave">PDF erstellen</button><button class="btn sec" id="lCancel">Abbrechen</button></div>
 </dialog>
 
@@ -104,10 +106,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="config.js"></script>
-<script src="js/basis.js"></script>
-<script src="js/baum.js"></script>
-<script src="js/pdf.js"></script>
-<script src="js/app.js"></script>
+<script src="config.js?v=2026-11-14e"></script>
+<script src="js/basis.js?v=2026-11-14e"></script>
+<script src="js/baum.js?v=2026-11-14e"></script>
+<script src="js/pdf.js?v=2026-11-14e"></script>
+<script src="js/app.js?v=2026-11-14e"></script>
 </body>
 </html>

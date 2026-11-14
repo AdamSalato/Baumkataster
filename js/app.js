@@ -3,8 +3,7 @@
 const TEST = /[?&]test\b/i.test(location.search);       // index.html?test = Testversion ohne Datenbank (js/mock.js)
 let sb, map, layer, geoPin, homeLL = null;
 const markers = new Map();
-const OHNE = '\u0000';                                    // Kundenfilter „Ohne Kunde“
-const S = { objs: [], sel: null, kons: [], kid: null, typ: 'baum', filter: 'all', kunde: '', sort: { k: 'dring', dir: 1 }, q: '', mode: 'pruef', tool: null, draft: null, me: null, admin: false };
+const S = { objs: [], sel: null, kons: [], kid: null, typ: 'baum', filter: 'all', sort: { k: 'dring', dir: 1 }, q: '', mode: 'pruef', tool: null, draft: null, me: null, admin: false };
 const kCur = () => S.kons.find(k => k.id === S.kid);
 const locked = k => !S.admin && abgelaufen(k);            // für den angemeldeten Benutzer gesperrt?
 const noMap = () => document.body.classList.contains('nomap');
@@ -32,7 +31,7 @@ const loadScript = src => new Promise((ok, no) => { const s = document.createEle
 async function boot() {
   brand();
   if (TEST) {
-    try { await loadScript('js/mock.js'); } catch (e) { showLogin(); $('err').textContent = 'js/mock.js konnte nicht geladen werden.'; return; }
+    try { await loadScript('js/mock.js?v=' + Date.now()); } catch (e) { showLogin(); $('err').textContent = 'js/mock.js konnte nicht geladen werden.'; return; }
     sb = createMock();
     $('testHint').hidden = $('testChip').hidden = $('bReset').hidden = false; $('emLbl').textContent = 'Benutzer'; $('em').type = 'text';
   } else {
@@ -161,7 +160,6 @@ const kundenListe = () => [...new Set(S.objs.map(o => (o.kunde || '').trim()).fi
 function refreshKunden() {
   const l = kundenListe();
   $('kunden').innerHTML = l.map(k => `<option value="${esc(k)}">`).join('');
-  if (S.kunde && S.kunde !== OHNE && !l.includes(S.kunde)) S.kunde = '';
 }
 
 // ===== Dashboard =====
@@ -176,9 +174,8 @@ const FILTER = {
   ent: ['Entfernt', t => true, 'off']
 };
 const matchQ = t => { const q = S.q.toLowerCase().trim(); return !q || [t.kennung, t.name, t.kunde, t.art, t.strasse, t.hausnummer, t.plz, t.stadt, t.pruefer].join(' ').toLowerCase().includes(q); };
-const matchK = t => !S.kunde || (S.kunde === OHNE ? !t.kunde : t.kunde === S.kunde);
 const matchF = t => S.filter === 'ent' ? !!t.entfernt : !t.entfernt && (FILTER[S.filter] || FILTER.all)[1](t);
-const visible = t => t.typ === S.typ && ((S.sel && S.sel.id === t.id) || (matchK(t) && matchQ(t) && matchF(t)));
+const visible = t => t.typ === S.typ && ((S.sel && S.sel.id === t.id) || (matchQ(t) && matchF(t)));
 function sorted(list) {
   const dir = S.sort.dir, k = S.filter === 'mass' && S.sort.k === 'dring' ? 'mass' : S.sort.k, ds = t => status(t).days, rk = t => sich(t.sicherheit).rank,
     mb = t => { const d = massBis(t.letzte_pruefung, t.dringlichkeit); return d ? d.getTime() : 9e15; }, str = (a, b) => String(a ?? '').localeCompare(String(b ?? ''), 'de', { numeric: true });
@@ -195,10 +192,9 @@ function sorted(list) {
   return list.slice().sort((a, b) => cmp(a, b) * dir);
 }
 // Die Liste genau so, wie sie im Dashboard steht (für Tabelle und PDF-Liste)
-const currentList = () => sorted(S.objs.filter(t => t.typ === S.typ && matchK(t) && matchQ(t) && matchF(t)));
+const currentList = () => sorted(S.objs.filter(t => t.typ === S.typ && matchQ(t) && matchF(t)));
 function filterText() {
   const TT = TYPES[S.typ], p = [S.filter === 'all' ? 'Alle ' + TT.plural : FILTER[S.filter][0]];
-  if (S.kunde) p.push(S.kunde === OHNE ? 'ohne Kunde' : 'Kunde: ' + S.kunde);
   if (S.q.trim()) p.push(`Suche: „${S.q.trim()}“`);
   return p.join(' · ');
 }
@@ -210,10 +206,10 @@ function showDash() {
   else $('panel').scrollTop = 0;
 }
 function renderDash() {
-  const TT = TYPES[S.typ], pool = S.objs.filter(o => o.typ === S.typ && matchK(o)), akt = pool.filter(o => !o.entfernt), n = f => akt.filter(f).length;
+  const TT = TYPES[S.typ], pool = S.objs.filter(o => o.typ === S.typ), akt = pool.filter(o => !o.entfernt), n = f => akt.filter(f).length;
   const nRisk = n(FILTER.risk[1]);
   const chips = Object.entries(FILTER).map(([k, [l, f, cls]]) => k === 'all' ? [k, 'Alle ' + TT.plural, akt.length, ''] : k === 'ent' ? [k, l, pool.length - akt.length, cls] : [k, l, n(f), k === 'risk' && nRisk ? 'rdk' : cls]);
-  const list = currentList(), kl = kundenListe();
+  const list = currentList();
   const th = (k, l, cls = '') => `<th class="${cls}"><button data-sort="${k}" aria-label="Sortieren nach ${l}">${l}${S.sort.k === k ? (S.sort.dir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`;
   const rows = list.map(t => {
     const st = status(t), nm = t.name && t.name !== t.kennung ? esc(t.name) : '<span class="mute">–</span>';
@@ -226,12 +222,11 @@ function renderDash() {
     <td class="hide-s nw">${T(t).keyFmt(T(t).keyValue(t))}</td></tr>`;
   }).join('');
   const types = Object.keys(TYPES).length > 1 ? `<select id="typSel" aria-label="Objekttyp">${Object.entries(TYPES).map(([c, v]) => `<option value="${c}" ${c === S.typ ? 'selected' : ''}>${v.plural}</option>`).join('')}</select>` : '';
-  const kSel = kl.length ? `<select id="kSel" aria-label="Kunde filtern"><option value="">Alle Kunden</option>${kl.map(k => `<option value="${esc(k)}" ${k === S.kunde ? 'selected' : ''}>${esc(k)}</option>`).join('')}<option value="${OHNE}" ${S.kunde === OHNE ? 'selected' : ''}>Ohne Kunde</option></select>` : '';
   $('dash').innerHTML = `
   <div class="sum">${chips.map(([k, l, c, cls]) => `<button class="${cls}${S.filter === k ? ' on' : ''}" data-f="${k}" aria-pressed="${S.filter === k}"><b>${c}</b><span>${l}</span></button>`).join('')}</div>
-  <div class="bar">${types}${kSel}<input id="q" type="search" placeholder="Suchen: ID, Name, Kunde, Art, Adresse, Prüfer" value="${esc(S.q)}" aria-label="Suchen"></div>
+  <div class="bar">${types}<input id="q" type="search" placeholder="Suchen: ID, Name, Kunde, Art, Adresse, Prüfer" value="${esc(S.q)}" aria-label="Suchen"></div>
   <div class="card tbl"><div class="sc"><table><thead><tr>${th('id', 'ID')}${th('name', 'Name')}${th('kunde', 'Kunde', 'hide-xs')}${th('dring', 'Letzte Prüfung')}${th('pruefer', 'Prüfer', 'hide-s')}${th('risk', 'Verkehrssicherheit')}${th('key', TT.keyLabel.replace('Baumhöhe', 'Höhe'), 'hide-s')}</tr></thead>
-  <tbody>${rows}</tbody></table>${rows ? '' : `<div class="empty">${pool.length || S.kunde ? 'Keine Treffer für diese Auswahl.' : `Noch keine ${TT.plural} erfasst. Mit „+ Neuer ${TT.label}“ den ersten anlegen.`}</div>`}</div></div>`;
+  <tbody>${rows}</tbody></table>${rows ? '' : `<div class="empty">${pool.length ? 'Keine Treffer für diese Auswahl.' : `Noch keine ${TT.plural} erfasst. Mit „+ Neuer ${TT.label}“ den ersten anlegen.`}</div>`}</div></div>`;
 }
 $('dash').addEventListener('click', e => {
   const f = e.target.closest('[data-f]'), s = e.target.closest('[data-sort]'), r = e.target.closest('tr.r');
@@ -246,8 +241,7 @@ $('dash').addEventListener('input', e => {
   const q = $('q'); q.focus(); q.setSelectionRange(pos, pos);
 });
 $('dash').addEventListener('change', e => {
-  if (e.target.id === 'typSel') { S.typ = e.target.value; S.filter = 'all'; S.kunde = ''; renderDash(); renderMarkers(); }
-  if (e.target.id === 'kSel') { S.kunde = e.target.value; renderDash(); renderMarkers(); }
+  if (e.target.id === 'typSel') { S.typ = e.target.value; S.filter = 'all'; renderDash(); renderMarkers(); }
 });
 
 // ===== Auswahl & Detail =====
@@ -474,7 +468,6 @@ async function posFromAddress() {
 function openNew() {
   const Ty = TYPES[S.typ];
   ['n_name', 'n_kunde', 'n_art', 'n_str', 'n_nr', 'n_plz', 'n_ort', 'n_h'].forEach(i => $(i).value = '');
-  if (S.kunde && S.kunde !== OHNE) $('n_kunde').value = S.kunde;          // Kundenfilter aktiv: Kunde vorbelegen
   $('n_first').checked = true; document.querySelector('input[name=npos][value=adresse]').checked = true; $('nSave').textContent = 'Speichern';
   $('dTitleNew').textContent = 'Neuer ' + Ty.label; $('n_artl').firstChild.textContent = Ty.artLabel; $('n_hw').hidden = S.typ !== 'baum';
   $('dlg').showModal(); $('n_name').focus();
